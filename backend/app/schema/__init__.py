@@ -22,7 +22,13 @@ from .messages import (
     QCReport,
     Severity,
 )
-from .report import FinalReport, ReportSection
+from .report import (
+    ComparisonCell,
+    ComparisonMatrix,
+    ComparisonRow,
+    FinalReport,
+    ReportSection,
+)
 
 __all__ = [
     "CompetitorKnowledge",
@@ -39,6 +45,9 @@ __all__ = [
     "QCFinding",
     "QCReport",
     "Severity",
+    "ComparisonCell",
+    "ComparisonMatrix",
+    "ComparisonRow",
     "FinalReport",
     "ReportSection",
 ]

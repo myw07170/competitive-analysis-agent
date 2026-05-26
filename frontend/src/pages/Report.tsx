@@ -5,7 +5,8 @@ import remarkGfm from "remark-gfm";
 import { getReport, getTrace, TraceEvent } from "../api/client";
 import SourceBadge from "../components/SourceBadge";
 import TraceList from "../components/TraceList";
-import { Locale, makeT, marketToLocale } from "../i18n";
+import ComparisonView from "../components/ComparisonView";
+import { Locale, makeT } from "../i18n";
 
 export default function Report() {
   const { reportId } = useParams<{ reportId: string }>();
@@ -14,7 +15,9 @@ export default function Report() {
 
   const [report, setReport] = useState<any>(null);
   const [events, setEvents] = useState<TraceEvent[]>([]);
-  const [tab, setTab] = useState<"report" | "competitors" | "trace" | "sources">("report");
+  const [tab, setTab] = useState<
+    "report" | "comparison" | "competitors" | "trace" | "sources"
+  >("report");
 
   useEffect(() => {
     if (reportId) getReport(reportId).then(setReport).catch(() => {});
@@ -27,39 +30,64 @@ export default function Report() {
   const locale: Locale = useMemo(() => (report?.locale as Locale) || "en-US", [report]);
   const t = useMemo(() => makeT(locale), [locale]);
 
+  // Build a source-id -> source lookup used by every component that renders
+  // [^src_xxx] footnote markers inline.
+  const sourceMap = useMemo(() => {
+    const map: Record<string, any> = {};
+    for (const s of report?.all_sources || []) map[s.id] = s;
+    for (const c of report?.competitors || []) {
+      for (const s of c.sources || []) map[s.id] = s;
+    }
+    return map;
+  }, [report]);
+
   if (!report) {
     return <div className="max-w-5xl mx-auto p-6 text-slate-500">{t("common.loading")}</div>;
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-4">
-      <div className="bg-white border rounded-xl p-5">
+    <div className="max-w-6xl mx-auto p-6 space-y-4" id="report-root">
+      <div className="bg-white border rounded-xl p-5 print:border-0 print:p-0">
         <div className="flex items-baseline gap-3 mb-1">
           <h1 className="text-2xl font-semibold">{report.title}</h1>
-          <span className="text-xs px-2 py-0.5 bg-slate-100 rounded">{report.market.toUpperCase()}</span>
+          <span className="text-xs px-2 py-0.5 bg-slate-100 rounded">
+            {report.market.toUpperCase()}
+          </span>
           <span className="text-xs text-slate-500">{report.locale}</span>
+          <button
+            onClick={() => window.print()}
+            className="ml-auto text-xs px-3 py-1.5 rounded border border-brand-600 text-brand-700 hover:bg-brand-50 print:hidden"
+          >
+            ⬇ {t("report.download_pdf")}
+          </button>
         </div>
         <p className="text-sm text-slate-500 mb-3">
-          {t("form.product.label")}: <b>{report.product}</b> · {new Date(report.generated_at).toLocaleString()}
+          {t("form.product.label")}: <b>{report.product}</b> ·{" "}
+          {new Date(report.generated_at).toLocaleString()}
         </p>
 
         <MetricsBar t={t} metrics={report.metrics} />
       </div>
 
-      <div className="bg-white border rounded-xl">
-        <div className="border-b flex gap-1 px-3">
-          {([
-            ["report", t("report.title")],
-            ["competitors", t("report.competitors")],
-            ["trace", t("trace.title")],
-            ["sources", t("report.sources")],
-          ] as const).map(([k, label]) => (
+      <div className="bg-white border rounded-xl print:border-0">
+        <div className="border-b flex gap-1 px-3 print:hidden">
+          {(
+            [
+              ["report", t("report.title")],
+              ["comparison", t("report.comparison")],
+              ["competitors", t("report.competitors")],
+              ["trace", t("trace.title")],
+              ["sources", t("report.sources")],
+            ] as const
+          ).map(([k, label]) => (
             <button
               key={k}
               onClick={() => setTab(k)}
               className={
                 "px-3 py-2 text-sm border-b-2 -mb-px " +
-                (tab === k ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500")
+                (tab === k
+                  ? "border-brand-600 text-brand-700"
+                  : "border-transparent text-slate-500")
               }
             >
               {label}
@@ -67,11 +95,23 @@ export default function Report() {
           ))}
         </div>
 
-        <div className="p-5">
-          {tab === "report" && <ReportBody t={t} report={report} />}
-          {tab === "competitors" && <CompetitorsTab t={t} report={report} />}
-          {tab === "trace" && <TraceList t={t} events={events} />}
-          {tab === "sources" && <SourcesTab t={t} report={report} />}
+        <div className="p-5 print:p-0">
+          {/* On screen: only the active tab. When printing: render everything stacked. */}
+          <div className={tab === "report" ? "" : "hidden print:block"}>
+            <ReportBody t={t} report={report} sourceMap={sourceMap} />
+          </div>
+          <div className={tab === "comparison" ? "" : "hidden print:block"}>
+            <ComparisonView t={t} comparison={report.comparison} />
+          </div>
+          <div className={tab === "competitors" ? "" : "hidden print:block"}>
+            <CompetitorsTab t={t} report={report} />
+          </div>
+          <div className={tab === "trace" ? "" : "hidden"}>
+            <TraceList t={t} events={events} />
+          </div>
+          <div className={tab === "sources" ? "" : "hidden print:block"}>
+            <SourcesTab t={t} report={report} />
+          </div>
         </div>
       </div>
     </div>
@@ -101,20 +141,110 @@ function MetricsBar({ t, metrics }: { t: (k: string) => string; metrics: any }) 
   );
 }
 
-function ReportBody({ t, report }: { t: (k: string) => string; report: any }) {
+function ReportBody({
+  t,
+  report,
+  sourceMap,
+}: {
+  t: (k: string) => string;
+  report: any;
+  sourceMap: Record<string, any>;
+}) {
   return (
     <div className="markdown-body">
       <h2>{t("report.executive")}</h2>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{report.executive_summary_md || ""}</ReactMarkdown>
+      <CitedMarkdown text={report.executive_summary_md || ""} sourceMap={sourceMap} />
       {(report.sections || []).map((s: any, i: number) => (
         <section key={i}>
           <h2>{s.heading}</h2>
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{s.body_md || ""}</ReactMarkdown>
+          <CitedMarkdown text={s.body_md || ""} sourceMap={sourceMap} />
           {s.sources?.length > 0 && <SourceBadge t={t} sources={s.sources} />}
         </section>
       ))}
     </div>
   );
+}
+
+/**
+ * Renders markdown that contains [^src_xxx] footnote markers. Each marker is
+ * rewritten as a markdown link `[short](#source-src_xxx)` which is then
+ * rendered as a clickable superscript that scrolls to the Sources tab entry
+ * (or opens the source URL in a new tab when one is available).
+ */
+function CitedMarkdown({
+  text,
+  sourceMap,
+}: {
+  text: string;
+  sourceMap: Record<string, any>;
+}) {
+  const transformed = useMemo(() => {
+    if (!text) return "";
+    // remark-gfm parses [^xxx] as footnote references and would render them
+    // as garbled definitions. Rewrite them to plain markdown links pointing
+    // to anchors we control in the Sources tab.
+    return text.replace(/\[\^(src_[A-Za-z0-9_]+)\]/g, (_m, id) => {
+      // Escape inner brackets so the outer link-text grammar parses cleanly.
+      return ` [\\[${shortId(id)}\\]](#source-${id})`;
+    });
+  }, [text]);
+
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        a: (props: any) => {
+          const href: string = props.href || "";
+          const m = href.match(/^#source-(src_[A-Za-z0-9_]+)$/);
+          if (!m) {
+            return (
+              <a
+                {...props}
+                target={href.startsWith("http") ? "_blank" : undefined}
+                rel="noreferrer"
+              />
+            );
+          }
+          const id = m[1];
+          const s = sourceMap[id];
+          const label = s?.title || id;
+          const onClick = (e: React.MouseEvent) => {
+            e.preventDefault();
+            if (s?.url) {
+              window.open(s.url, "_blank", "noopener,noreferrer");
+              return;
+            }
+            const el = document.getElementById(`source-${id}`);
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+              el.classList.add("ring-2", "ring-amber-400");
+              setTimeout(() => el.classList.remove("ring-2", "ring-amber-400"), 1600);
+            }
+          };
+          return (
+            <sup className="cite-ref">
+              <a
+                href={s?.url || `#source-${id}`}
+                onClick={onClick}
+                title={label + (s?.snippet ? `\n\n${s.snippet}` : "")}
+                className="text-brand-700 hover:underline"
+              >
+                [{shortId(id)}]
+              </a>
+            </sup>
+          );
+        },
+      }}
+    >
+      {transformed}
+    </ReactMarkdown>
+  );
+}
+
+function shortId(id: string): string {
+  // src_abc123def -> abc1
+  const tail = id.replace(/^src_/, "");
+  return tail.slice(0, 4) || id;
 }
 
 function CompetitorsTab({ t, report }: { t: (k: string) => string; report: any }) {
@@ -125,14 +255,21 @@ function CompetitorsTab({ t, report }: { t: (k: string) => string; report: any }
           <div className="flex items-baseline gap-3">
             <h3 className="text-lg font-semibold">{c.name}</h3>
             {c.homepage && (
-              <a href={c.homepage} target="_blank" rel="noreferrer" className="text-xs text-brand-600">
+              <a
+                href={c.homepage}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-brand-600"
+              >
                 {c.homepage}
               </a>
             )}
           </div>
           <p className="text-sm text-slate-600">{c.short_description}</p>
           {c.market_position && (
-            <p className="text-xs text-slate-500"><b>{t("form.market.label")}:</b> {c.market_position}</p>
+            <p className="text-xs text-slate-500">
+              <b>{t("form.market.label")}:</b> {c.market_position}
+            </p>
           )}
 
           <div className="grid md:grid-cols-3 gap-4 pt-2">
@@ -141,10 +278,14 @@ function CompetitorsTab({ t, report }: { t: (k: string) => string; report: any }
                 {(c.function_tree?.nodes || []).map((n: any) => (
                   <li key={n.name}>
                     <span className="font-medium">{n.name}</span>
-                    {n.maturity && <span className="text-[10px] ml-1 text-slate-400">({n.maturity})</span>}
+                    {n.maturity && (
+                      <span className="text-[10px] ml-1 text-slate-400">({n.maturity})</span>
+                    )}
                     {n.children?.length > 0 && (
                       <ul className="ml-4 list-[circle] list-inside text-slate-600">
-                        {n.children.map((cc: any) => <li key={cc.name}>{cc.name}</li>)}
+                        {n.children.map((cc: any) => (
+                          <li key={cc.name}>{cc.name}</li>
+                        ))}
                       </ul>
                     )}
                   </li>
@@ -170,12 +311,13 @@ function CompetitorsTab({ t, report }: { t: (k: string) => string; report: any }
               </ul>
             </Card>
             <Card title="User profile">
-              <div className="text-sm text-slate-600 mb-2">
-                {c.user_profile?.primary_segment}
-              </div>
+              <div className="text-sm text-slate-600 mb-2">{c.user_profile?.primary_segment}</div>
               <ul className="text-sm list-disc list-inside space-y-0.5">
                 {(c.user_profile?.segments || []).map((s: any) => (
-                  <li key={s.name}>{s.name} <span className="text-xs text-slate-400">({s.company_size})</span></li>
+                  <li key={s.name}>
+                    {s.name}{" "}
+                    <span className="text-xs text-slate-400">({s.company_size})</span>
+                  </li>
                 ))}
               </ul>
               {c.user_profile?.nps_or_rating && (
@@ -207,7 +349,17 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   );
 }
 
-function SwotBox({ label, items, color, t }: { label: string; items: any[]; color: string; t: (k: string) => string }) {
+function SwotBox({
+  label,
+  items,
+  color,
+  t,
+}: {
+  label: string;
+  items: any[];
+  color: string;
+  t: (k: string) => string;
+}) {
   const bg: Record<string, string> = {
     emerald: "bg-emerald-50 border-emerald-200",
     rose: "bg-rose-50 border-rose-200",
@@ -233,22 +385,42 @@ function SourcesTab({ t, report }: { t: (k: string) => string; report: any }) {
   const sources = report.all_sources || [];
   return (
     <div className="space-y-2 text-sm">
+      {sources.length > 0 && (
+        <div className="text-xs text-slate-500 mb-2 italic">{t("source.confidence.help")}</div>
+      )}
       {sources.length === 0 && <div className="text-slate-400">—</div>}
       {sources.map((s: any) => (
-        <div key={s.id} className="border rounded px-3 py-2 flex items-baseline gap-3">
-          <span className="text-xs text-slate-500 w-20">[{s.kind}]</span>
-          <div className="flex-1">
+        <div
+          id={`source-${s.id}`}
+          key={s.id}
+          className="border rounded px-3 py-2 flex items-baseline gap-3 transition"
+        >
+          <span className="text-[10px] font-mono text-slate-400 w-16 shrink-0">
+            [{shortId(s.id)}]
+          </span>
+          <span className="text-xs text-slate-500 w-20 shrink-0">[{s.kind}]</span>
+          <div className="flex-1 min-w-0">
             {s.url ? (
-              <a href={s.url} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+              <a
+                href={s.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-brand-700 hover:underline break-all"
+              >
                 {s.title || s.url}
               </a>
             ) : (
-              <span>{s.title}</span>
+              <span>{s.title || "—"}</span>
             )}
             {s.snippet && <div className="text-xs text-slate-500 mt-0.5">{s.snippet}</div>}
           </div>
           {typeof s.confidence === "number" && (
-            <span className="text-xs text-slate-400">{(s.confidence * 100).toFixed(0)}%</span>
+            <span
+              className="text-xs text-slate-500 shrink-0"
+              title={t("source.confidence.help")}
+            >
+              {t("source.confidence")}: {(s.confidence * 100).toFixed(0)}%
+            </span>
           )}
         </div>
       ))}

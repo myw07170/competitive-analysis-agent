@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -13,6 +13,51 @@ class ReportSection(BaseModel):
     heading: str
     body_md: str = Field(description="Markdown body. May contain [^src_xxx] citations.")
     sources: List[SourceRef] = Field(default_factory=list)
+
+
+class ComparisonCell(BaseModel):
+    """One cell in a multi-competitor comparison table."""
+
+    competitor: str
+    value: str = ""
+    detail: Optional[str] = None
+
+
+class ComparisonRow(BaseModel):
+    """One row in a comparison table (one capability / tier / segment, all competitors)."""
+
+    label: str
+    category: Optional[str] = None
+    cells: List[ComparisonCell] = Field(default_factory=list)
+
+
+class ComparisonMatrix(BaseModel):
+    """Structured multi-competitor comparison — rendered as a real chart/table in the UI.
+
+    Built deterministically from the CompetitorKnowledge records so the comparison
+    is never lost to LLM markdown drift.
+    """
+
+    competitors: List[str] = Field(default_factory=list)
+    feature_rows: List[ComparisonRow] = Field(default_factory=list)
+    pricing_rows: List[ComparisonRow] = Field(default_factory=list)
+    user_rows: List[ComparisonRow] = Field(default_factory=list)
+    keywords: Dict[str, List[str]] = Field(
+        default_factory=dict,
+        description="Keyword cards per competitor: name -> list of short keyword strings.",
+    )
+    function_coverage: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Leaf-feature count per competitor (for bar chart).",
+    )
+    source_counts: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Unique source count per competitor.",
+    )
+    pricing_floor: Dict[str, Optional[float]] = Field(
+        default_factory=dict,
+        description="Cheapest paid monthly price per competitor (or null).",
+    )
 
 
 class ReportMetrics(BaseModel):
@@ -40,6 +85,7 @@ class FinalReport(BaseModel):
     executive_summary_md: str = ""
     sections: List[ReportSection] = Field(default_factory=list)
     competitors: List[CompetitorKnowledge] = Field(default_factory=list)
+    comparison: ComparisonMatrix = Field(default_factory=ComparisonMatrix)
 
     metrics: ReportMetrics = Field(default_factory=ReportMetrics)
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

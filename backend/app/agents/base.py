@@ -200,6 +200,54 @@ def _repair_truncated_json(text: str) -> Optional[str]:
     return body
 
 
+def _escape_unescaped_controls_in_strings(text: str) -> str:
+    """Escape literal newline / tab / CR characters that appear *inside* JSON strings.
+
+    LLMs frequently emit multi-line markdown values like::
+
+        "body_md": "| a | b |
+                    | - | - |
+                    | 1 | 2 |"
+
+    which is invalid JSON. This function walks the text, tracks the
+    "inside a string" state, and replaces raw \\n / \\r / \\t with their JSON
+    escape sequences. Characters outside strings (including the whitespace
+    between fields) are left untouched.
+    """
+    out: list[str] = []
+    in_str = False
+    escape = False
+    for ch in text:
+        if in_str:
+            if escape:
+                out.append(ch)
+                escape = False
+                continue
+            if ch == "\\":
+                out.append(ch)
+                escape = True
+                continue
+            if ch == '"':
+                out.append(ch)
+                in_str = False
+                continue
+            if ch == "\n":
+                out.append("\\n")
+                continue
+            if ch == "\r":
+                out.append("\\r")
+                continue
+            if ch == "\t":
+                out.append("\\t")
+                continue
+            out.append(ch)
+        else:
+            if ch == '"':
+                in_str = True
+            out.append(ch)
+    return "".join(out)
+
+
 def _parse_json_safely(text: str) -> Optional[Dict[str, Any]]:
     """Parse JSON, tolerating fences, prose wrappers, trailing commas, and truncation."""
     if not text:
@@ -231,8 +279,26 @@ def _parse_json_safely(text: str) -> Optional[Dict[str, Any]]:
             except json.JSONDecodeError:
                 pass
 
-    # 4) Last resort: repair a mid-stream truncation by closing open structures.
-    repaired = _repair_truncated_json(stripped)
+    # 4) Escape literal newlines/tabs inside string values — common LLM
+    #    failure when markdown tables appear in JSON string fields.
+    escaped = _escape_unescaped_controls_in_strings(stripped)
+    if escaped != stripped:
+        try:
+            return json.loads(escaped)
+        except json.JSONDecodeError:
+            block2 = _extract_balanced_json(escaped)
+            if block2:
+                try:
+                    return json.loads(block2)
+                except json.JSONDecodeError:
+                    cleaned2 = _TRAILING_COMMA_RE.sub(r"\1", block2)
+                    try:
+                        return json.loads(cleaned2)
+                    except json.JSONDecodeError:
+                        pass
+
+    # 5) Last resort: repair a mid-stream truncation by closing open structures.
+    repaired = _repair_truncated_json(escaped if escaped != stripped else stripped)
     if repaired:
         repaired = _TRAILING_COMMA_RE.sub(r"\1", repaired)
         try:
