@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: ui-sans-serif, system-ui, -apple-system, "PingFang SC",
+    "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+/* ReactFlow theme tweaks */
+.react-flow__node {
+  font-size: 12px;
+  border-radius: 10px;
+}
+
+.dag-node {
+  @apply px-3 py-2 rounded-lg border bg-white shadow-sm;
+  min-width: 140px;
+}
+.dag-node.running { @apply border-amber-400 bg-amber-50; }
+.dag-node.done    { @apply border-emerald-400 bg-emerald-50; }
+.dag-node.rework  { @apply border-rose-400 bg-rose-50; }
+
+.markdown-body h2 { @apply text-xl font-semibold mt-6 mb-2; }
+.markdown-body h3 { @apply text-lg font-semibold mt-4 mb-2; }
+.markdown-body p  { @apply my-2 leading-7; }
+.markdown-body ul { @apply list-disc list-inside my-2; }
+.markdown-body code { @apply bg-slate-100 px-1 rounded; }

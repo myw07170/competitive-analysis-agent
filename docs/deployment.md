@@ -1,0 +1,155 @@
+# Deployment Guide
+
+## 1. Local development
+
+### Prerequisites
+* Python **3.10+**
+* Node **18+**, `pnpm` (or `npm` / `yarn`)
+* A Volcengine Ark account (optional — system also runs in mock mode)
+
+### Backend
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
+Copy-Item .env.example .env
+# Fill in ARK_API_KEY and ARK_MODEL_ID, or leave them blank for mock mode.
+
+python main.py
+```
+
+Backend listens on `http://127.0.0.1:8000`. Health check: `GET /api/health`.
+
+### Frontend
+
+```powershell
+cd frontend
+pnpm install
+pnpm dev
+```
+
+Frontend on `http://127.0.0.1:5173`. The Vite proxy forwards `/api/*` to the backend, so no CORS configuration is needed for local dev.
+
+### One-shot demo (CLI, no UI)
+
+```powershell
+cd backend
+python -m app.scripts.demo --product "Notion" --market us
+```
+
+This prints the final JSON report and writes it to `backend/data/reports/`. Useful for screen-recording or for piping into other tools.
+
+## 2. Configuration
+
+All configuration is via environment variables (or `.env`). See `backend/.env.example` for the complete list. The most important ones:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ARK_API_KEY` | empty | Volcengine API key |
+| `ARK_MODEL_ID` | empty | Endpoint / model ID (e.g. `ep-202401XX-xxxxx`) |
+| `ARK_BASE_URL` | `https://ark.cn-beijing.volces.com/api/v3` | Ark endpoint |
+| `VOLC_MOCK` | `0` | Set to `1` to force mock mode even with a key |
+| `SEARCH_PROVIDER` | `none` | `tavily` / `serper` / `bing` / `none` |
+| `MAX_QC_ITERATIONS` | `2` | Maximum rework loops |
+| `MIN_SOURCES_PER_COMPETITOR` | `3` | QC threshold |
+| `RESPECT_ROBOTS` | `1` | Set to `0` only for testing |
+
+## 3. Production deployment
+
+### 3.1 Single-host (recommended for first deploy)
+
+```
+┌────────────────────────────┐
+│       Nginx / Caddy        │
+│  Static frontend (built)   │
+│  Reverse-proxy to :8000    │
+└────────────────────────────┘
+              │
+┌────────────────────────────┐
+│   FastAPI (uvicorn)        │
+│   Port 8000                │
+└────────────────────────────┘
+              │
+┌────────────────────────────┐
+│  SQLite (data/app.sqlite)  │
+└────────────────────────────┘
+```
+
+Steps:
+
+1. Build the frontend: `cd frontend && pnpm build`. Output goes to `frontend/dist`.
+2. Configure Nginx to serve `frontend/dist` and proxy `/api/*` to `127.0.0.1:8000`.
+3. Run the backend under a process supervisor (systemd, supervisord, pm2).
+
+Sample systemd unit (Linux):
+
+```ini
+[Unit]
+Description=Competitive Analysis Agent backend
+After=network.target
+
+[Service]
+WorkingDirectory=/srv/competitive-analysis-agent/backend
+EnvironmentFile=/srv/competitive-analysis-agent/backend/.env
+ExecStart=/srv/competitive-analysis-agent/backend/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 2
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 3.2 Docker (optional)
+
+A `Dockerfile` is not included by default to keep the repo lean, but the layout is straightforward:
+
+```dockerfile
+# Stage 1: frontend
+FROM node:20-alpine AS fe
+WORKDIR /app
+COPY frontend/ ./frontend
+RUN cd frontend && npm install && npm run build
+
+# Stage 2: backend
+FROM python:3.11-slim
+WORKDIR /app
+COPY backend/ ./backend
+RUN pip install --no-cache-dir -r backend/requirements.txt
+COPY --from=fe /app/frontend/dist /app/frontend_dist
+EXPOSE 8000
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+(Serve `/app/frontend_dist` with Nginx in front, or mount a `StaticFiles` route in FastAPI.)
+
+### 3.3 Scaling
+
+* **Vertical scale**: increase `--workers` on uvicorn. Each worker is an isolated event loop; the in-process `_RUNS` registry means SSE clients must hit the same worker as the start request — see "Horizontal scale" below for the fix.
+* **Horizontal scale**: replace the in-process `_RUNS` registry with Redis pub/sub (one-line change in [`backend/app/api/analysis.py`](../backend/app/api/analysis.py)). The Tracer already emits to an async queue.
+* **Persistent storage**: SQLite is fine for prototype. For production-grade, switch to Postgres — `aiosqlite` ↔ `asyncpg` is mostly mechanical, the table schema is identical.
+
+## 4. Observability in production
+
+* All log lines are structured (component, level, message). Pipe stderr to your log aggregator.
+* The `/api/traces/{run_id}` endpoint is the source of truth for replay.
+* `report.metrics` contains per-run KPIs that you should ingest into your BI tool to track:
+  * `elapsed_seconds`
+  * `total_tokens`
+  * `schema_completeness`
+  * `avg_sources_per_competitor`
+  * `qc_iterations`, `rework_count`
+
+These map directly to the "business loop" metrics the rubric calls out: efficiency (time), coverage (sources), consistency (schema completeness), and manual-correction rate (rework count → operator-edits ratio when you add a manual-edit UI in v1.1).
+
+## 5. Common issues
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| Frontend renders but API calls 404 | Vite proxy mis-targeted | Check `vite.config.ts` proxy `target` matches backend port |
+| `report not found` after a run | Backend restarted between start and finish | SQLite is per-host; in dev that resets on each restart |
+| LLM call returns 401 | Bad key or expired key | Re-issue from the Volcengine console; check `ARK_MODEL_ID` is the endpoint ID, not the model family name |
+| All sources show "llm_prior" | No search backend configured | Set `SEARCH_PROVIDER` and the corresponding key in `.env` |
+| Long runs hit timeout | `ARK_TIMEOUT` too low for your model | Bump to 120s+ for slower models |
