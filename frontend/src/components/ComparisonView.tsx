@@ -14,6 +14,7 @@ export interface ComparisonRow {
 
 export interface ComparisonMatrix {
   competitors: string[];
+  self_name?: string | null;
   feature_rows: ComparisonRow[];
   pricing_rows: ComparisonRow[];
   user_rows: ComparisonRow[];
@@ -28,19 +29,30 @@ interface Props {
   comparison?: ComparisonMatrix | null;
 }
 
-const PALETTE = ["#2563eb", "#db2777", "#059669", "#d97706", "#7c3aed", "#0891b2"];
+// The user's own product gets a fixed warm accent so it's instantly
+// distinguishable from the cool-palette competitors in every chart / table.
+const SELF_COLOR = "#f59e0b";
+const PALETTE = ["#2563eb", "#db2777", "#059669", "#0891b2", "#7c3aed", "#0ea5e9"];
 
 export default function ComparisonView({ t, comparison }: Props) {
   if (!comparison || !comparison.competitors?.length) {
     return <div className="text-sm text-slate-400">{t("comparison.empty")}</div>;
   }
 
-  const { competitors } = comparison;
+  const { competitors, self_name } = comparison;
   const colorFor = useMemo(() => {
     const map: Record<string, string> = {};
-    competitors.forEach((n, i) => (map[n] = PALETTE[i % PALETTE.length]));
+    let paletteIdx = 0;
+    for (const n of competitors) {
+      if (n === self_name) {
+        map[n] = SELF_COLOR;
+      } else {
+        map[n] = PALETTE[paletteIdx % PALETTE.length];
+        paletteIdx += 1;
+      }
+    }
     return map;
-  }, [competitors]);
+  }, [competitors, self_name]);
 
   return (
     <div className="space-y-6">
@@ -87,6 +99,8 @@ export default function ComparisonView({ t, comparison }: Props) {
               name={n}
               color={colorFor[n]}
               keywords={comparison.keywords[n] || []}
+              isSelf={n === self_name}
+              selfLabel={t("comparison.self") || "Your product"}
             />
           ))}
         </div>
@@ -97,18 +111,24 @@ export default function ComparisonView({ t, comparison }: Props) {
         rows={comparison.feature_rows}
         competitors={competitors}
         colorFor={colorFor}
+        selfName={self_name}
+        selfLabel={t("comparison.self") || "Your product"}
       />
       <ComparisonTable
         title={t("comparison.pricing")}
         rows={comparison.pricing_rows}
         competitors={competitors}
         colorFor={colorFor}
+        selfName={self_name}
+        selfLabel={t("comparison.self") || "Your product"}
       />
       <ComparisonTable
         title={t("comparison.user")}
         rows={comparison.user_rows}
         competitors={competitors}
         colorFor={colorFor}
+        selfName={self_name}
+        selfLabel={t("comparison.self") || "Your product"}
       />
     </div>
   );
@@ -154,14 +174,34 @@ function KeywordCard({
   name,
   color,
   keywords,
+  isSelf,
+  selfLabel,
 }: {
   name: string;
   color: string;
   keywords: string[];
+  isSelf?: boolean;
+  selfLabel?: string;
 }) {
   return (
-    <div className="border rounded-lg p-3" style={{ borderLeft: `4px solid ${color}` }}>
-      <div className="text-sm font-semibold text-slate-800 mb-2">{name}</div>
+    <div
+      className={
+        "border rounded-lg p-3 " +
+        (isSelf ? "bg-amber-50/60 ring-1 ring-amber-200" : "")
+      }
+      style={{ borderLeft: `4px solid ${color}` }}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <div className="text-sm font-semibold text-slate-800">{name}</div>
+        {isSelf && (
+          <span
+            className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200"
+            title={selfLabel}
+          >
+            ★ {selfLabel}
+          </span>
+        )}
+      </div>
       <div className="flex flex-wrap gap-1.5">
         {keywords.length === 0 && <span className="text-xs text-slate-400">—</span>}
         {keywords.map((k, i) => (
@@ -183,11 +223,15 @@ function ComparisonTable({
   rows,
   competitors,
   colorFor,
+  selfName,
+  selfLabel,
 }: {
   title: string;
   rows: ComparisonRow[];
   competitors: string[];
   colorFor: Record<string, string>;
+  selfName?: string | null;
+  selfLabel?: string;
 }) {
   if (!rows || rows.length === 0) return null;
   return (
@@ -198,15 +242,32 @@ function ComparisonTable({
           <thead className="bg-slate-50">
             <tr>
               <th className="text-left px-3 py-2 font-medium text-slate-600 w-1/4">—</th>
-              {competitors.map((n) => (
-                <th key={n} className="text-left px-3 py-2 font-medium text-slate-700">
-                  <span
-                    className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle"
-                    style={{ background: colorFor[n] }}
-                  />
-                  {n}
-                </th>
-              ))}
+              {competitors.map((n) => {
+                const isSelf = n === selfName;
+                return (
+                  <th
+                    key={n}
+                    className={
+                      "text-left px-3 py-2 font-medium text-slate-700 " +
+                      (isSelf ? "bg-amber-50" : "")
+                    }
+                  >
+                    <span
+                      className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle"
+                      style={{ background: colorFor[n] }}
+                    />
+                    {n}
+                    {isSelf && (
+                      <span
+                        className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 align-middle"
+                        title={selfLabel}
+                      >
+                        ★ {selfLabel}
+                      </span>
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -215,8 +276,15 @@ function ComparisonTable({
                 <td className="px-3 py-2 font-medium text-slate-700">{row.label}</td>
                 {competitors.map((n) => {
                   const cell = row.cells.find((c) => c.competitor === n);
+                  const isSelf = n === selfName;
                   return (
-                    <td key={n} className="px-3 py-2 text-slate-700 align-top">
+                    <td
+                      key={n}
+                      className={
+                        "px-3 py-2 text-slate-700 align-top " +
+                        (isSelf ? "bg-amber-50/60" : "")
+                      }
+                    >
                       {cell?.value || "—"}
                       {cell?.detail && (
                         <div className="text-[11px] text-slate-400">{cell.detail}</div>

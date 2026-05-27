@@ -26,18 +26,18 @@ interface Props {
   t?: (k: string, vars?: Record<string, string | number>) => string;
 }
 
-// Generously spaced layout — wider gaps + a slight vertical offset for the
-// QC/done branch make the flow read like a real DAG, not a flat chain.
+// Generously spaced layout — wide horizontal gaps make the flow read like a
+// real DAG and give each node room to breathe with its progress bar.
 const POS: Record<string, { x: number; y: number }> = {
-  identify: { x: 0, y: 60 },
-  collect: { x: 220, y: 60 },
-  analyze: { x: 440, y: 60 },
-  write: { x: 660, y: 60 },
-  qc: { x: 880, y: 60 },
-  done: { x: 1100, y: 60 },
+  identify: { x: 0, y: 80 },
+  collect: { x: 310, y: 80 },
+  analyze: { x: 620, y: 80 },
+  write: { x: 930, y: 80 },
+  qc: { x: 1240, y: 80 },
+  done: { x: 1550, y: 80 },
 };
 
-const NODE_WIDTH = 190;
+const NODE_WIDTH = 200;
 
 export default function DAGFlow({
   dag,
@@ -162,12 +162,12 @@ export default function DAGFlow({
   );
 
   return (
-    <div style={{ height: 260 }}>
+    <div style={{ height: 300 }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         fitView
-        fitViewOptions={{ padding: 0.15 }}
+        fitViewOptions={{ padding: 0.18 }}
         proOptions={{ hideAttribution: true }}
         nodesDraggable={false}
         nodesConnectable={false}

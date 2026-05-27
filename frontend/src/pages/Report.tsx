@@ -38,6 +38,9 @@ export default function Report() {
     for (const c of report?.competitors || []) {
       for (const s of c.sources || []) map[s.id] = s;
     }
+    if (report?.target_product) {
+      for (const s of report.target_product.sources || []) map[s.id] = s;
+    }
     return map;
   }, [report]);
 
@@ -54,12 +57,28 @@ export default function Report() {
             {report.market.toUpperCase()}
           </span>
           <span className="text-xs text-slate-500">{report.locale}</span>
-          <button
-            onClick={() => window.print()}
-            className="ml-auto text-xs px-3 py-1.5 rounded border border-brand-600 text-brand-700 hover:bg-brand-50 print:hidden"
-          >
-            ⬇ {t("report.download_pdf")}
-          </button>
+          <div className="ml-auto flex items-center gap-2 print:hidden">
+            <button
+              onClick={() => window.open(`/api/reports/${report.id}/html`, "_blank", "noopener,noreferrer")}
+              className="text-xs px-3 py-1.5 rounded border border-brand-600 text-brand-700 hover:bg-brand-50"
+              title={t("report.preview_html_title") || "Open the standalone HTML report in a new tab"}
+            >
+              🔍 {t("report.preview_html") || "Preview HTML"}
+            </button>
+            <a
+              href={`/api/reports/${report.id}/html?download=1`}
+              className="text-xs px-3 py-1.5 rounded border border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+              title={t("report.download_html_title") || "Download a single-file HTML report"}
+            >
+              ⬇ {t("report.download_html") || "Download HTML"}
+            </a>
+            <button
+              onClick={() => window.print()}
+              className="text-xs px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-50"
+            >
+              🖨 {t("report.download_pdf")}
+            </button>
+          </div>
         </div>
         <p className="text-sm text-slate-500 mb-3">
           {t("form.product.label")}: <b>{report.product}</b> ·{" "}
@@ -248,12 +267,28 @@ function shortId(id: string): string {
 }
 
 function CompetitorsTab({ t, report }: { t: (k: string) => string; report: any }) {
+  const items: Array<{ data: any; isSelf: boolean }> = [];
+  if (report.target_product) {
+    items.push({ data: report.target_product, isSelf: true });
+  }
+  for (const c of report.competitors || []) items.push({ data: c, isSelf: false });
   return (
     <div className="space-y-6">
-      {(report.competitors || []).map((c: any) => (
-        <div key={c.name} className="border rounded-lg p-4 space-y-3">
+      {items.map(({ data: c, isSelf }) => (
+        <div
+          key={(isSelf ? "self:" : "") + c.name}
+          className={
+            "border rounded-lg p-4 space-y-3 " +
+            (isSelf ? "bg-amber-50/60 ring-1 ring-amber-200 border-amber-200" : "")
+          }
+        >
           <div className="flex items-baseline gap-3">
             <h3 className="text-lg font-semibold">{c.name}</h3>
+            {isSelf && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                ★ {t("comparison.self")}
+              </span>
+            )}
             {c.homepage && (
               <a
                 href={c.homepage}

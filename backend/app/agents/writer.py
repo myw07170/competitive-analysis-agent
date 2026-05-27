@@ -30,6 +30,7 @@ class WriterAgent(BaseAgent):
         product: str,
         report_id: str,
         competitors: List[CompetitorKnowledge],
+        target_product: Optional[CompetitorKnowledge] = None,
     ) -> FinalReport:
         loc = get_locale(self.market.locale)
         sys_prompt = WRITER_SYSTEM.format(language=self.language_name)
@@ -65,9 +66,13 @@ class WriterAgent(BaseAgent):
         # Guarantee multi-competitor coverage: if the writer's narrative
         # mentions fewer than half of competitors, append a deterministic
         # comparison appendix so the user still sees them all.
-        sections = _ensure_multi_competitor_coverage(sections, competitors, loc)
-        all_sources = _collect_sources(competitors)
-        comparison = _build_comparison_matrix(competitors)
+        sections = _ensure_multi_competitor_coverage(
+            sections, competitors, loc, target_product=target_product,
+        )
+        all_sources = _collect_sources(
+            (competitors + [target_product]) if target_product else competitors
+        )
+        comparison = _build_comparison_matrix(competitors, target_product=target_product)
 
         return FinalReport(
             id=report_id,
@@ -78,6 +83,7 @@ class WriterAgent(BaseAgent):
             executive_summary_md=raw.get("executive_summary_md", ""),
             sections=sections,
             competitors=competitors,
+            target_product=target_product,
             comparison=comparison,
             all_sources=all_sources,
         )
@@ -122,13 +128,21 @@ def _ensure_multi_competitor_coverage(
     sections: List[ReportSection],
     competitors: List[CompetitorKnowledge],
     loc: Dict[str, str],
+    target_product: Optional[CompetitorKnowledge] = None,
 ) -> List[ReportSection]:
     """If the writer's prose under-covers competitors, append a deterministic
-    multi-competitor appendix so the user always sees every competitor."""
+    multi-competitor appendix so the user always sees every competitor.
+
+    When ``target_product`` is provided it is included as the first column so
+    the snapshot puts the user's own product side-by-side with competitors.
+    """
     if len(competitors) <= 1 or not sections:
         return sections
 
-    names = [c.name for c in competitors]
+    all_items: List[CompetitorKnowledge] = (
+        ([target_product] + competitors) if target_product else competitors
+    )
+    names = [c.name for c in all_items]
     joined_body = " \n".join(s.body_md or "" for s in sections)
     mentions = sum(1 for n in names if n and n in joined_body)
     # If at least 60% of competitors are referenced, trust the writer's output.
@@ -141,7 +155,7 @@ def _ensure_multi_competitor_coverage(
     body_lines.append("|" + "|".join(["---"] * (len(names) + 1)) + "|")
 
     def _row(label: str, getter) -> str:
-        cells = [str(getter(c) or "—") for c in competitors]
+        cells = [str(getter(c) or "—") for c in all_items]
         return f"| **{label}** | " + " | ".join(cells) + " |"
 
     body_lines.append(_row("Market position", lambda c: c.market_position))
@@ -171,19 +185,30 @@ def _cheapest_tier_label(c: CompetitorKnowledge) -> str:
 # ---------------------------------------------------------------------------
 # Structured comparison matrix (deterministic — independent of LLM markdown)
 # ---------------------------------------------------------------------------
-def _build_comparison_matrix(competitors: List[CompetitorKnowledge]) -> ComparisonMatrix:
-    names = [c.name for c in competitors]
+def _build_comparison_matrix(
+    competitors: List[CompetitorKnowledge],
+    target_product: Optional[CompetitorKnowledge] = None,
+) -> ComparisonMatrix:
+    """Build the structured comparison.
 
-    feature_rows = _build_feature_rows(competitors)
-    pricing_rows = _build_pricing_rows(competitors)
-    user_rows = _build_user_rows(competitors)
+    When ``target_product`` is provided it is prepended as the first column so
+    every chart / table contains the user's own product alongside competitors.
+    """
+    all_items: List[CompetitorKnowledge] = (
+        ([target_product] + competitors) if target_product else competitors
+    )
+    names = [c.name for c in all_items]
+
+    feature_rows = _build_feature_rows(all_items)
+    pricing_rows = _build_pricing_rows(all_items)
+    user_rows = _build_user_rows(all_items)
 
     keywords: Dict[str, List[str]] = {}
     function_coverage: Dict[str, int] = {}
     source_counts: Dict[str, int] = {}
     pricing_floor: Dict[str, Optional[float]] = {}
 
-    for c in competitors:
+    for c in all_items:
         keywords[c.name] = _extract_keywords(c)
         function_coverage[c.name] = c.function_tree.leaf_count()
         source_counts[c.name] = c.source_count()
@@ -193,6 +218,7 @@ def _build_comparison_matrix(competitors: List[CompetitorKnowledge]) -> Comparis
 
     return ComparisonMatrix(
         competitors=names,
+        self_name=target_product.name if target_product else None,
         feature_rows=feature_rows,
         pricing_rows=pricing_rows,
         user_rows=user_rows,

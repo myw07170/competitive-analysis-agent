@@ -94,22 +94,31 @@ export default function Home() {
         setActiveNodeId(n);
         setNodeStatus((s) => {
           const next: Record<string, NodeStatus> = { ...s };
-          next[n] = "done";
-          // QC rework: mark collect node as needing rework.
+          // Current node is still "running" — it only transitions to "done"
+          // when a later-stage event arrives. This keeps a multi-competitor
+          // collect/analyze stage marked as in-progress until ALL competitors
+          // have been processed (the next stage's first event implies the
+          // previous stage is complete).
+          next[n] = next[n] === "rework" ? "rework" : "running";
+          const idx = NODE_ORDER.indexOf(n);
+          for (let i = 0; i < idx; i++) {
+            const prev = NODE_ORDER[i];
+            if (next[prev] !== "rework") next[prev] = "done";
+          }
+          // QC rework: mark collect node as needing rework so the next round
+          // of collect events relight it as running.
           if (n === "qc") {
             try {
               const parsed = ev.response ? JSON.parse(ev.response) : null;
               if (parsed?.decision === "rework") {
                 next["collect"] = "rework";
+                next["analyze"] = "rework";
                 pushLog({ node: "qc", tone: "warn", text: t("progress.qc.rework") });
               }
             } catch {
               /* mock data may not be JSON */
             }
           }
-          // Light up the NEXT node as "running" so the UI shows live state.
-          const nextNode = nextRunningNode(n, next);
-          if (nextNode) next[nextNode] = "running";
           return next;
         });
 
@@ -134,7 +143,19 @@ export default function Home() {
       onDone: (info) => {
         setPhase(info.error ? "error" : "done");
         setActiveNodeId(info.error ? null : "done");
-        setNodeStatus((s) => ({ ...s, done: info.error ? "rework" : "done" }));
+        setNodeStatus((s) => {
+          const next: Record<string, NodeStatus> = { ...s };
+          if (!info.error) {
+            // Final transition: every prior stage must be done now.
+            for (const id of NODE_ORDER) {
+              if (next[id] !== "rework") next[id] = "done";
+            }
+            next["done"] = "done";
+          } else {
+            next["done"] = "rework";
+          }
+          return next;
+        });
         if (info.error) {
           setError(info.error);
           pushLog({ node: "done", tone: "warn", text: t("progress.error", { msg: info.error }) });
@@ -149,17 +170,6 @@ export default function Home() {
         pushLog({ node: "done", tone: "warn", text: t("progress.error", { msg: String(err) }) });
       },
     });
-  }
-
-  function nextRunningNode(
-    finished: string,
-    statusNow: Record<string, NodeStatus>,
-  ): string | null {
-    const idx = NODE_ORDER.indexOf(finished);
-    if (idx < 0 || idx + 1 >= NODE_ORDER.length) return null;
-    const next = NODE_ORDER[idx + 1];
-    if (statusNow[next] === "done") return null;
-    return next;
   }
 
   function updateProgress(
@@ -315,32 +325,61 @@ function ProgressFeed({
   t: (k: string) => string;
   lines: ProgressLine[];
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const latest = lines.length > 0 ? lines[lines.length - 1] : null;
+  const history = lines.slice(0, -1).slice().reverse();
+
+  const toneClass = (tone: ProgressLine["tone"]) =>
+    tone === "warn"
+      ? "bg-rose-100 text-rose-800"
+      : tone === "ok"
+      ? "bg-emerald-100 text-emerald-800"
+      : "bg-slate-100 text-slate-700";
+
   return (
     <div className="mt-4 border-t pt-3">
-      <div className="text-xs font-medium text-slate-600 mb-2">{t("progress.feed")}</div>
-      <ul className="space-y-1 max-h-44 overflow-y-auto pr-2">
-        {lines.length === 0 && <li className="text-xs text-slate-400">—</li>}
-        {lines.map((l, i) => (
-          <li key={i} className="flex items-start gap-2 text-xs">
-            <span className="text-slate-400 w-14 shrink-0 tabular-nums">
-              {new Date(l.ts).toLocaleTimeString().slice(0, 8)}
-            </span>
-            <span
-              className={
-                "px-1.5 rounded shrink-0 " +
-                (l.tone === "warn"
-                  ? "bg-rose-100 text-rose-800"
-                  : l.tone === "ok"
-                  ? "bg-emerald-100 text-emerald-800"
-                  : "bg-slate-100 text-slate-700")
-              }
-            >
-              {l.node}
-            </span>
-            <span className="text-slate-700">{l.text}</span>
-          </li>
-        ))}
-      </ul>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs font-medium text-slate-600">{t("progress.feed")}</div>
+        {lines.length > 1 && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="text-[11px] px-2 py-0.5 rounded border border-slate-200 hover:bg-slate-50 text-slate-600"
+            aria-expanded={expanded}
+          >
+            {expanded
+              ? `${t("progress.collapse") || "Collapse"} ▴`
+              : `${t("progress.expand") || "Expand"} (${lines.length}) ▾`}
+          </button>
+        )}
+      </div>
+
+      {!latest && <div className="text-xs text-slate-400">—</div>}
+
+      {latest && (
+        <div className="flex items-start gap-2 text-xs">
+          <span className="text-slate-400 w-14 shrink-0 tabular-nums">
+            {new Date(latest.ts).toLocaleTimeString().slice(0, 8)}
+          </span>
+          <span className={"px-1.5 rounded shrink-0 " + toneClass(latest.tone)}>
+            {latest.node}
+          </span>
+          <span className="text-slate-700 flex-1">{latest.text}</span>
+        </div>
+      )}
+
+      {expanded && history.length > 0 && (
+        <ul className="space-y-1 max-h-56 overflow-y-auto pr-2 mt-2 pt-2 border-t border-dashed border-slate-200">
+          {history.map((l, i) => (
+            <li key={i} className="flex items-start gap-2 text-xs opacity-80">
+              <span className="text-slate-400 w-14 shrink-0 tabular-nums">
+                {new Date(l.ts).toLocaleTimeString().slice(0, 8)}
+              </span>
+              <span className={"px-1.5 rounded shrink-0 " + toneClass(l.tone)}>{l.node}</span>
+              <span className="text-slate-700 flex-1">{l.text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

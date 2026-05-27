@@ -36,9 +36,16 @@ class ComparisonMatrix(BaseModel):
 
     Built deterministically from the CompetitorKnowledge records so the comparison
     is never lost to LLM markdown drift.
+
+    The first entry in ``competitors`` is the user's own product when
+    ``self_name`` is set; the frontend renders it in a distinct accent color.
     """
 
     competitors: List[str] = Field(default_factory=list)
+    self_name: Optional[str] = Field(
+        default=None,
+        description="Name of the user's own product (i.e. the analysis subject).",
+    )
     feature_rows: List[ComparisonRow] = Field(default_factory=list)
     pricing_rows: List[ComparisonRow] = Field(default_factory=list)
     user_rows: List[ComparisonRow] = Field(default_factory=list)
@@ -85,6 +92,11 @@ class FinalReport(BaseModel):
     executive_summary_md: str = ""
     sections: List[ReportSection] = Field(default_factory=list)
     competitors: List[CompetitorKnowledge] = Field(default_factory=list)
+    target_product: Optional[CompetitorKnowledge] = Field(
+        default=None,
+        description="Knowledge collected for the user's own product (the analysis subject), "
+                    "included alongside competitors in the comparison.",
+    )
     comparison: ComparisonMatrix = Field(default_factory=ComparisonMatrix)
 
     metrics: ReportMetrics = Field(default_factory=ReportMetrics)

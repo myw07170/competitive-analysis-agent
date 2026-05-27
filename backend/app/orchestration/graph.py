@@ -47,6 +47,7 @@ class GraphState(TypedDict, total=False):
     iteration: int
     competitor_names: List[str]
     competitors: List[Dict[str, Any]]
+    target_product: Optional[Dict[str, Any]]
     qc_history: List[Dict[str, Any]]
     last_qc: Optional[Dict[str, Any]]
     report: Optional[Dict[str, Any]]
@@ -81,6 +82,23 @@ def _make_nodes(market: MarketProfile):
         iteration = state.get("iteration", 0)
         last_qc = state.get("last_qc") or {}
         rework_notes = _rework_notes(last_qc)
+
+        # First, gather knowledge about the user's own product so it can be
+        # included in the comparison alongside competitors. We treat this as
+        # a regular collector call (same schema, same evidence pipeline) and
+        # surface it through ``state["target_product"]``.
+        target_product = state.get("target_product")
+        if target_product is None or iteration > 0:
+            try:
+                self_ck = await collector.gather_competitor(
+                    product=product,
+                    competitor_name=product,
+                    iteration=iteration,
+                    rework_notes=rework_notes,
+                )
+                target_product = self_ck.model_dump(mode="json")
+            except Exception as exc:
+                log.warning(f"collector failed for self={product!r} (it={iteration}): {exc!r}")
 
         # On rework iterations, keep the previous-iteration competitors so we
         # never lose ground when a single fresh response is malformed.
@@ -124,7 +142,12 @@ def _make_nodes(market: MarketProfile):
                 f"{len(merged) - len(fresh)} carried over from previous iteration"
             )
 
-        return {**state, "competitors": merged, "skipped_competitors": skipped}
+        return {
+            **state,
+            "competitors": merged,
+            "skipped_competitors": skipped,
+            "target_product": target_product,
+        }
 
     async def n_analyze(state: GraphState) -> GraphState:
         product = state["request"]["product"]
@@ -138,15 +161,32 @@ def _make_nodes(market: MarketProfile):
                 # SWOT failure is non-fatal — ship the competitor without it.
                 log.warning(f"analyst failed for {ck.name!r}: {exc!r}; continuing without SWOT")
             out.append(ck.model_dump(mode="json"))
-        return {**state, "competitors": out}
+
+        # Also produce a SWOT for the user's own product so the comparison
+        # shows symmetric coverage.
+        target_product = state.get("target_product")
+        if target_product:
+            try:
+                tck = CompetitorKnowledge.model_validate(target_product)
+                tck.swot = await analyst.analyze(product=product, competitor=tck)
+                target_product = tck.model_dump(mode="json")
+            except Exception as exc:
+                log.warning(f"analyst failed for self={product!r}: {exc!r}; continuing without SWOT")
+
+        return {**state, "competitors": out, "target_product": target_product}
 
     async def n_write(state: GraphState) -> GraphState:
         product = state["request"]["product"]
         comps = [CompetitorKnowledge.model_validate(c) for c in state.get("competitors", [])]
+        tp_raw = state.get("target_product")
+        target_product = (
+            CompetitorKnowledge.model_validate(tp_raw) if tp_raw else None
+        )
         report: FinalReport = await writer.write(
             product=product,
             report_id=f"rpt_{uuid4().hex[:10]}",
             competitors=comps,
+            target_product=target_product,
         )
         return {**state, "report": report.model_dump(mode="json")}
 
@@ -239,9 +279,14 @@ async def run_analysis(req: AnalysisRequest, tracer: Tracer) -> FinalReport:
     # Compute metrics now that the run is done.
     qc_history = final_state.get("qc_history", []) or []
     rework_count = sum(1 for q in qc_history if q.get("decision") == "rework")
-    completeness = _schema_completeness(report.competitors)
-    avg_sources = (sum(c.source_count() for c in report.competitors) / len(report.competitors)
-                   if report.competitors else 0.0)
+    # Include the target product in completeness/avg-source metrics so the
+    # numbers reflect everything actually shipped in the report.
+    completeness_items = list(report.competitors)
+    if report.target_product is not None:
+        completeness_items.append(report.target_product)
+    completeness = _schema_completeness(completeness_items)
+    avg_sources = (sum(c.source_count() for c in completeness_items) / len(completeness_items)
+                   if completeness_items else 0.0)
 
     report.metrics = ReportMetrics(
         elapsed_seconds=tracer.elapsed_seconds(),
