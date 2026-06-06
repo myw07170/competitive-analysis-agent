@@ -24,8 +24,11 @@ export default function Report() {
   }, [reportId]);
 
   useEffect(() => {
-    if (runId) getTrace(runId).then(setEvents).catch(() => {});
-  }, [runId]);
+    // Prefer the live ?run= param; fall back to the run_id persisted on the
+    // report so the trace is available even when opened from history.
+    const rid = runId || report?.run_id;
+    if (rid) getTrace(rid).then(setEvents).catch(() => {});
+  }, [runId, report?.run_id]);
 
   const locale: Locale = useMemo(() => (report?.locale as Locale) || "en-US", [report]);
   const t = useMemo(() => makeT(locale), [locale]);

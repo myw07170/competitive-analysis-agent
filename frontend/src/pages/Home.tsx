@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   DagDef,
@@ -10,12 +10,15 @@ import {
   streamRun,
 } from "../api/client";
 import AnalysisForm from "../components/AnalysisForm";
-import DAGFlow, { NodeProgress } from "../components/DAGFlow";
-import TraceList from "../components/TraceList";
+import AgentFlow, {
+  NodeProgress,
+  NodeStatus,
+  NODE_ORDER,
+  intentToNode,
+} from "../components/AgentFlow";
 import { Locale, makeT, marketToLocale } from "../i18n";
 
 type Phase = "idle" | "running" | "done" | "error";
-type NodeStatus = "idle" | "running" | "done" | "rework";
 
 interface ProgressLine {
   ts: number;
@@ -23,8 +26,6 @@ interface ProgressLine {
   text: string;
   tone: "info" | "warn" | "ok";
 }
-
-const NODE_ORDER = ["identify", "collect", "analyze", "write", "qc", "done"];
 
 export default function Home() {
   const [markets, setMarkets] = useState<MarketInfo[]>([]);
@@ -38,6 +39,11 @@ export default function Home() {
   const [progressLog, setProgressLog] = useState<ProgressLine[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [plannedCompetitors, setPlannedCompetitors] = useState<number>(0);
+  const [submittedProduct, setSubmittedProduct] = useState<string>("");
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
+  // Furthest pipeline stage reached in the current cycle — a collect event
+  // arriving after we've already passed collect signals a QC rework loop.
+  const frontierRef = useRef(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -47,15 +53,8 @@ export default function Home() {
 
   const locale: Locale = marketToLocale(market);
   const t = useMemo(() => makeT(locale), [locale]);
-
-  function intentToNode(intent: string): string | null {
-    if (intent.startsWith("collector.identify")) return "identify";
-    if (intent.startsWith("collector.")) return "collect";
-    if (intent.startsWith("analyst.")) return "analyze";
-    if (intent.startsWith("writer.")) return "write";
-    if (intent.startsWith("qc.")) return "qc";
-    return null;
-  }
+  const started = phase !== "idle";
+  const marketInfo = markets.find((m) => m.code === market);
 
   function pushLog(line: Omit<ProgressLine, "ts">) {
     setProgressLog((l) => [...l, { ...line, ts: Date.now() }].slice(-50));
@@ -69,6 +68,9 @@ export default function Home() {
     setNodeStatus({ identify: "running" });
     setNodeProgress({});
     setProgressLog([]);
+    frontierRef.current = 0;
+    setSubmittedProduct(product);
+    setSidebarOpen(false); // collapse setup once a run is underway
     setPlannedCompetitors(extra.length || 0);
     pushLog({
       node: "identify",
@@ -82,6 +84,33 @@ export default function Home() {
         setEvents((prev) => [...prev, ev]);
         const n = intentToNode(ev.intent);
         if (!n) return;
+        const idx = NODE_ORDER.indexOf(n);
+
+        // QC rework loop: a fresh collect event after we've already advanced
+        // past collect means QC routed back. Reset every downstream stage —
+        // status AND progress — so the new round relights them cleanly (this
+        // is what clears the stale "write"/"qc" progress bars). There is no
+        // separate "rework" status; the round badge communicates the loop.
+        if (n === "collect" && frontierRef.current > NODE_ORDER.indexOf("collect")) {
+          frontierRef.current = NODE_ORDER.indexOf("collect");
+          setNodeStatus((s) => ({
+            ...s,
+            analyze: "idle",
+            write: "idle",
+            qc: "idle",
+            done: "idle",
+          }));
+          setNodeProgress((p) => {
+            const next = { ...p };
+            delete next.collect;
+            delete next.analyze;
+            delete next.write;
+            delete next.qc;
+            return next;
+          });
+          pushLog({ node: "qc", tone: "warn", text: t("progress.qc.rework") });
+        }
+        frontierRef.current = Math.max(frontierRef.current, idx);
 
         // Track sub-progress per node from the trace intents / decisions.
         setNodeProgress((p) => updateProgress(p, ev));
@@ -94,31 +123,12 @@ export default function Home() {
         setActiveNodeId(n);
         setNodeStatus((s) => {
           const next: Record<string, NodeStatus> = { ...s };
-          // Current node is still "running" — it only transitions to "done"
-          // when a later-stage event arrives. This keeps a multi-competitor
-          // collect/analyze stage marked as in-progress until ALL competitors
-          // have been processed (the next stage's first event implies the
-          // previous stage is complete).
-          next[n] = next[n] === "rework" ? "rework" : "running";
-          const idx = NODE_ORDER.indexOf(n);
-          for (let i = 0; i < idx; i++) {
-            const prev = NODE_ORDER[i];
-            if (next[prev] !== "rework") next[prev] = "done";
-          }
-          // QC rework: mark collect node as needing rework so the next round
-          // of collect events relight it as running.
-          if (n === "qc") {
-            try {
-              const parsed = ev.response ? JSON.parse(ev.response) : null;
-              if (parsed?.decision === "rework") {
-                next["collect"] = "rework";
-                next["analyze"] = "rework";
-                pushLog({ node: "qc", tone: "warn", text: t("progress.qc.rework") });
-              }
-            } catch {
-              /* mock data may not be JSON */
-            }
-          }
+          // Current node is "running" until a later-stage event arrives. This
+          // keeps a multi-competitor collect/analyze stage in-progress until
+          // ALL competitors have been processed (the next stage's first event
+          // implies the previous stage is complete).
+          next[n] = "running";
+          for (let i = 0; i < idx; i++) next[NODE_ORDER[i]] = "done";
           return next;
         });
 
@@ -146,13 +156,8 @@ export default function Home() {
         setNodeStatus((s) => {
           const next: Record<string, NodeStatus> = { ...s };
           if (!info.error) {
-            // Final transition: every prior stage must be done now.
-            for (const id of NODE_ORDER) {
-              if (next[id] !== "rework") next[id] = "done";
-            }
-            next["done"] = "done";
-          } else {
-            next["done"] = "rework";
+            // Final transition: every stage is done now.
+            for (const id of NODE_ORDER) next[id] = "done";
           }
           return next;
         });
@@ -213,31 +218,90 @@ export default function Home() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <section className="lg:col-span-1 space-y-4">
-        <div className="bg-white border rounded-xl p-5">
-          <h1 className="text-xl font-semibold mb-1">{t("app.title")}</h1>
-          <p className="text-sm text-slate-500 mb-4">{t("app.subtitle")}</p>
-          <AnalysisForm
-            t={t}
-            markets={markets}
-            market={market}
-            onMarketChange={setMarket}
-            onStart={onStart}
-            running={phase === "running"}
-          />
+    <div className="flex">
+      {/* Collapsible left sidebar — analysis setup */}
+      <aside
+        className={
+          "shrink-0 border-r bg-white transition-all duration-300 ease-out " +
+          (sidebarOpen ? "w-80" : "w-12")
+        }
+      >
+        <div className="sticky top-0">
+          <div className="flex items-center justify-between px-3 py-3 border-b">
+            {sidebarOpen && (
+              <span className="text-sm font-semibold text-slate-700">
+                {t("sidebar.setup")}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setSidebarOpen((v) => !v)}
+              title={sidebarOpen ? t("sidebar.collapse") : t("sidebar.expand")}
+              aria-label={sidebarOpen ? t("sidebar.collapse") : t("sidebar.expand")}
+              className="ml-auto w-7 h-7 flex items-center justify-center rounded border border-slate-200 text-slate-500 hover:bg-slate-50"
+            >
+              {sidebarOpen ? "‹" : "›"}
+            </button>
+          </div>
+
+          {sidebarOpen ? (
+            <div className="p-4 space-y-4">
+              <div>
+                <h1 className="text-base font-semibold mb-1">{t("app.title")}</h1>
+                <p className="text-xs text-slate-500 mb-3">{t("app.subtitle")}</p>
+                <AnalysisForm
+                  t={t}
+                  markets={markets}
+                  market={market}
+                  onMarketChange={setMarket}
+                  onStart={onStart}
+                  running={phase === "running"}
+                />
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="w-full py-4 text-slate-400 hover:text-slate-600 text-lg"
+              title={t("sidebar.expand")}
+            >
+              ⚙
+            </button>
+          )}
         </div>
+      </aside>
+
+      {/* Main content */}
+      <main className="flex-1 min-w-0 px-6 py-6 space-y-4">
+        {started ? (
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <h1 className="text-2xl font-semibold">{submittedProduct}</h1>
+            {marketInfo && (
+              <span className="inline-flex items-center gap-1.5 text-sm px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                <span>{marketInfo.flag}</span>
+                {marketInfo.display_name}
+              </span>
+            )}
+            <span className="text-sm text-slate-400">
+              {t("form.product.label")} · {t("form.market.label")}
+            </span>
+          </div>
+        ) : (
+          <div>
+            <h1 className="text-2xl font-semibold">{t("app.title")}</h1>
+            <p className="text-sm text-slate-500 mt-1">{t("app.subtitle")}</p>
+          </div>
+        )}
 
         {error && (
           <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl p-4 text-sm">
             {t("common.error")}: {error}
           </div>
         )}
-      </section>
 
-      <section className="lg:col-span-2 space-y-4">
         <div className="bg-white border rounded-xl p-5">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-1">
             <h2 className="font-semibold">{t("dag.title")}</h2>
             {phase === "running" && (
               <span className="inline-flex items-center gap-2 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
@@ -251,51 +315,46 @@ export default function Home() {
               </span>
             )}
           </div>
+          <p className="text-xs text-slate-400 mb-4">{t("flow.click_hint")}</p>
+
           {dag ? (
-            <DAGFlow
+            <AgentFlow
               dag={dag}
               locale={locale}
               nodeStatus={nodeStatus}
               activeNodeId={activeNodeId}
               nodeProgress={nodeProgress}
+              events={events}
               t={t}
             />
           ) : (
             <div className="text-sm text-slate-400">{t("common.loading")}</div>
           )}
+
           <Legend t={t} />
           {(phase === "running" || progressLog.length > 0) && (
             <ProgressFeed t={t} lines={progressLog} />
           )}
         </div>
-
-        <div className="bg-white border rounded-xl p-5">
-          <h2 className="font-semibold mb-3">{t("trace.title")}</h2>
-          <TraceList t={t} events={events} />
-        </div>
-      </section>
+      </main>
     </div>
   );
 }
 
 function Legend({ t }: { t: (k: string) => string }) {
   return (
-    <div className="flex flex-wrap gap-4 text-xs text-slate-500 mt-3">
+    <div className="flex flex-wrap gap-4 text-xs text-slate-500 mt-4 pt-3 border-t">
       <span className="flex items-center gap-1.5">
-        <span className="w-3 h-3 rounded border bg-white inline-block" />
+        <span className="w-3 h-3 rounded-full border-2 border-slate-300 bg-white inline-block" />
         {t("dag.legend.idle")}
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="w-3 h-3 rounded bg-amber-200 border border-amber-400 inline-block animate-pulse" />
+        <span className="w-3 h-3 rounded-full border-2 border-amber-500 bg-amber-400 inline-block animate-pulse" />
         {t("dag.legend.running")}
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="w-3 h-3 rounded bg-emerald-200 border border-emerald-400 inline-block" />
+        <span className="w-3 h-3 rounded-full border-2 border-emerald-500 bg-emerald-500 inline-block" />
         {t("dag.legend.done")}
-      </span>
-      <span className="flex items-center gap-1.5">
-        <span className="w-3 h-3 rounded bg-rose-200 border border-rose-400 inline-block" />
-        {t("dag.legend.rework")}
       </span>
     </div>
   );

@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la backend/.env*)",
+      "Bash(ls backend/.venv)",
+      "Bash(ls frontend/node_modules)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(python -m pytest -q)",
+      "Bash(./.venv/Scripts/python.exe -m pytest -q)",
+      "Bash(./.venv/Scripts/python.exe -m pytest -q tests/test_orchestration.py)",
+      "Bash(npx vite *)",
+      "Bash(echo \"TSC_EXIT=$?\")",
+      "Bash(echo \"BUILD_EXIT=$?\")",
+      "Read(//c/Users/myw/AppData/Local/Temp/caa-shots/**)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\myw\\AppData\\Local\\Temp\\caa-pw"
+    ]
+  }
+}

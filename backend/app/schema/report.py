@@ -84,6 +84,10 @@ class ReportMetrics(BaseModel):
 
 class FinalReport(BaseModel):
     id: str
+    run_id: str = Field(
+        default="",
+        description="Tracer run id that produced this report — links the report to its decision trace.",
+    )
     product: str = Field(description="The user-provided product being analyzed.")
     market: str = Field(description="cn | us | <future-market-code>")
     locale: str = Field(description="zh-CN | en-US | ...")

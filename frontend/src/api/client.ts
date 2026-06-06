@@ -119,6 +119,7 @@ export async function listReports(): Promise<any[]> {
 
 export async function getTrace(runId: string): Promise<TraceEvent[]> {
   const r = await fetch(`/api/traces/${runId}`);
+  if (!r.ok) return []; // 404 = no trace recorded for this run
   const j = await r.json();
-  return j.events;
+  return j.events ?? [];
 }

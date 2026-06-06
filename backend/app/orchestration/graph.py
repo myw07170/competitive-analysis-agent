@@ -275,6 +275,10 @@ async def run_analysis(req: AnalysisRequest, tracer: Tracer) -> FinalReport:
         final_state: GraphState = await graph.ainvoke(initial)
 
     report = FinalReport.model_validate(final_state["report"])
+    # Link the report to the trace that produced it so the "decision trace"
+    # panel can be reconstructed later (e.g. when opened from history), not
+    # only in the brief window where the live ?run= query param is present.
+    report.run_id = tracer.run_id
 
     # Compute metrics now that the run is done.
     qc_history = final_state.get("qc_history", []) or []
