@@ -5,6 +5,14 @@
 :root {
   font-family: ui-sans-serif, system-ui, -apple-system, "PingFang SC",
     "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+
+  /* ───────────────────────────────────────────────────────────────────────
+     PAGE WIDTH KNOB — the single value that controls how wide the centered
+     page column is. It governs, and keeps aligned, the top header bar
+     (App.tsx), the page titles, and the flow card (Home.tsx). Raise it for a
+     wider layout (e.g. 88rem ≈ 1408px) or lower it for a narrower one.
+     80rem ≈ 1280px (matches Tailwind's max-w-7xl).                          */
+  --page-max-width: 68rem;
 }
 
 body {

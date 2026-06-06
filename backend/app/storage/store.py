@@ -83,6 +83,27 @@ class Store:
                 for r in rows
             ]
 
+    async def delete_report(self, report_id: str) -> bool:
+        """Delete a report and every record tied to it (its trace events too).
+
+        Returns False when no such report exists so the API can answer 404.
+        """
+        async with aiosqlite.connect(self.db_path) as db:
+            cur = await db.execute("SELECT payload FROM reports WHERE id=?", (report_id,))
+            row = await cur.fetchone()
+            if not row:
+                return False
+            # The report blob carries the run_id that links it to its trace.
+            try:
+                run_id = json.loads(row[0]).get("run_id", "")
+            except (ValueError, AttributeError):
+                run_id = ""
+            if run_id:
+                await db.execute("DELETE FROM traces WHERE run_id=?", (run_id,))
+            await db.execute("DELETE FROM reports WHERE id=?", (report_id,))
+            await db.commit()
+            return True
+
     # ---- Traces ----
     async def save_trace_events(self, events: List[TraceEvent]) -> None:
         async with aiosqlite.connect(self.db_path) as db:

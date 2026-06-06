@@ -66,6 +66,10 @@ Produce JSON:
 {{
   "title": str,
   "executive_summary_md": str,
-  "sections": [ {{ "heading": str, "body_md": str, "sources": [SourceRef, ...] }}, ... ]
+  "sections": [ {{ "heading": str, "body_md": str, "sources": ["src_xxx", ...] }}, ... ]
 }}
+
+In each section, "sources" is the list of source IDs cited in that section's
+body (the same IDs used in its [^src_xxx] markers). Use only IDs that exist in
+the competitor data; never invent new ones.
 """

@@ -12,7 +12,12 @@
       "Bash(npx vite *)",
       "Bash(echo \"TSC_EXIT=$?\")",
       "Bash(echo \"BUILD_EXIT=$?\")",
-      "Read(//c/Users/myw/AppData/Local/Temp/caa-shots/**)"
+      "Read(//c/Users/myw/AppData/Local/Temp/caa-shots/**)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests -k \"writer or report or source\" -q)",
+      "Bash(ls -la data/)",
+      "Bash(ls -la data/app.sqlite)",
+      "Bash(find . -name \"app.sqlite\" -not -path \"*/.venv/*\")",
+      "Bash(python -c ' *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\myw\\AppData\\Local\\Temp\\caa-pw"

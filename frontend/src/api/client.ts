@@ -117,6 +117,11 @@ export async function listReports(): Promise<any[]> {
   return j.reports;
 }
 
+export async function deleteReport(reportId: string): Promise<void> {
+  const r = await fetch(`/api/reports/${reportId}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`delete failed: ${r.status}`);
+}
+
 export async function getTrace(runId: string): Promise<TraceEvent[]> {
   const r = await fetch(`/api/traces/${runId}`);
   if (!r.ok) return []; // 404 = no trace recorded for this run

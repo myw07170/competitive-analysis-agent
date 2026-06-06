@@ -27,10 +27,15 @@ interface ProgressLine {
   tone: "info" | "warn" | "ok";
 }
 
-export default function Home() {
+interface HomeProps {
+  // Owned by App so the header language can track it; the setup page drives it.
+  market: string;
+  setMarket: (code: string) => void;
+}
+
+export default function Home({ market, setMarket }: HomeProps) {
   const [markets, setMarkets] = useState<MarketInfo[]>([]);
   const [dag, setDag] = useState<DagDef | null>(null);
-  const [market, setMarket] = useState<string>("cn");
   const [phase, setPhase] = useState<Phase>("idle");
   const [events, setEvents] = useState<TraceEvent[]>([]);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
@@ -40,7 +45,6 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [plannedCompetitors, setPlannedCompetitors] = useState<number>(0);
   const [submittedProduct, setSubmittedProduct] = useState<string>("");
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   // Furthest pipeline stage reached in the current cycle — a collect event
   // arriving after we've already passed collect signals a QC rework loop.
   const frontierRef = useRef(0);
@@ -70,7 +74,6 @@ export default function Home() {
     setProgressLog([]);
     frontierRef.current = 0;
     setSubmittedProduct(product);
-    setSidebarOpen(false); // collapse setup once a run is underway
     setPlannedCompetitors(extra.length || 0);
     pushLog({
       node: "identify",
@@ -217,126 +220,88 @@ export default function Home() {
     };
   }
 
-  return (
-    <div className="flex">
-      {/* Collapsible left sidebar — analysis setup */}
-      <aside
-        className={
-          "shrink-0 border-r bg-white transition-all duration-300 ease-out " +
-          (sidebarOpen ? "w-80" : "w-12")
-        }
-      >
-        <div className="sticky top-0">
-          <div className="flex items-center justify-between px-3 py-3 border-b">
-            {sidebarOpen && (
-              <span className="text-sm font-semibold text-slate-700">
-                {t("sidebar.setup")}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => setSidebarOpen((v) => !v)}
-              title={sidebarOpen ? t("sidebar.collapse") : t("sidebar.expand")}
-              aria-label={sidebarOpen ? t("sidebar.collapse") : t("sidebar.expand")}
-              className="ml-auto w-7 h-7 flex items-center justify-center rounded border border-slate-200 text-slate-500 hover:bg-slate-50"
-            >
-              {sidebarOpen ? "‹" : "›"}
-            </button>
+  // ── Setup screen ─────────────────────────────────────────────────────────
+  // A standalone, centered page (no sidebar). It is the only thing shown until
+  // the user starts a run — the flow / decision-trace view is hidden until then.
+  if (!started) {
+    return (
+      <div className="max-w-[var(--page-max-width)] mx-auto px-6">
+        <div className="max-w-xl mx-auto py-12 sm:py-16">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-semibold">{t("app.title")}</h1>
+            <p className="text-slate-500 mt-2">{t("app.subtitle")}</p>
           </div>
-
-          {sidebarOpen ? (
-            <div className="p-4 space-y-4">
-              <div>
-                <h1 className="text-base font-semibold mb-1">{t("app.title")}</h1>
-                <p className="text-xs text-slate-500 mb-3">{t("app.subtitle")}</p>
-                <AnalysisForm
-                  t={t}
-                  markets={markets}
-                  market={market}
-                  onMarketChange={setMarket}
-                  onStart={onStart}
-                  running={phase === "running"}
-                />
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(true)}
-              className="w-full py-4 text-slate-400 hover:text-slate-600 text-lg"
-              title={t("sidebar.expand")}
-            >
-              ⚙
-            </button>
-          )}
-        </div>
-      </aside>
-
-      {/* Main content */}
-      <main className="flex-1 min-w-0 px-6 py-6 space-y-4">
-        {started ? (
-          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <h1 className="text-2xl font-semibold">{submittedProduct}</h1>
-            {marketInfo && (
-              <span className="inline-flex items-center gap-1.5 text-sm px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                <span>{marketInfo.flag}</span>
-                {marketInfo.display_name}
-              </span>
-            )}
-            <span className="text-sm text-slate-400">
-              {t("form.product.label")} · {t("form.market.label")}
-            </span>
-          </div>
-        ) : (
-          <div>
-            <h1 className="text-2xl font-semibold">{t("app.title")}</h1>
-            <p className="text-sm text-slate-500 mt-1">{t("app.subtitle")}</p>
-          </div>
-        )}
-
-        {error && (
-          <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl p-4 text-sm">
-            {t("common.error")}: {error}
-          </div>
-        )}
-
-        <div className="bg-white border rounded-xl p-5">
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="font-semibold">{t("dag.title")}</h2>
-            {phase === "running" && (
-              <span className="inline-flex items-center gap-2 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                {t("dag.legend.running")}
-              </span>
-            )}
-            {phase === "done" && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                {t("dag.legend.done")}
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-slate-400 mb-4">{t("flow.click_hint")}</p>
-
-          {dag ? (
-            <AgentFlow
-              dag={dag}
-              locale={locale}
-              nodeStatus={nodeStatus}
-              activeNodeId={activeNodeId}
-              nodeProgress={nodeProgress}
-              events={events}
+          <div className="bg-white border rounded-2xl p-6 sm:p-8 shadow-sm">
+            <AnalysisForm
               t={t}
+              markets={markets}
+              market={market}
+              onMarketChange={setMarket}
+              onStart={onStart}
+              running={false}
             />
-          ) : (
-            <div className="text-sm text-slate-400">{t("common.loading")}</div>
-          )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-          <Legend t={t} />
-          {(phase === "running" || progressLog.length > 0) && (
-            <ProgressFeed t={t} lines={progressLog} />
+  // ── Run screen ───────────────────────────────────────────────────────────
+  // Shown once a run starts: the Agent flow + decision trace and live progress.
+  return (
+    <div className="max-w-[var(--page-max-width)] mx-auto px-6 py-6 space-y-4">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <h1 className="text-2xl font-semibold">{submittedProduct}</h1>
+        {marketInfo && (
+          <span className="inline-flex items-center gap-1.5 text-sm px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
+            <span>{marketInfo.flag}</span>
+            {marketInfo.display_name}
+          </span>
+        )}
+      </div>
+
+      {error && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl p-4 text-sm">
+          {t("common.error")}: {error}
+        </div>
+      )}
+
+      <div className="bg-white border rounded-xl p-5">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="font-semibold">{t("dag.title")}</h2>
+          {phase === "running" && (
+            <span className="inline-flex items-center gap-2 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              {t("dag.legend.running")}
+            </span>
+          )}
+          {phase === "done" && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+              {t("dag.legend.done")}
+            </span>
           )}
         </div>
-      </main>
+        <p className="text-xs text-slate-400 mb-4">{t("flow.click_hint")}</p>
+
+        {dag ? (
+          <AgentFlow
+            dag={dag}
+            locale={locale}
+            nodeStatus={nodeStatus}
+            activeNodeId={activeNodeId}
+            nodeProgress={nodeProgress}
+            events={events}
+            t={t}
+          />
+        ) : (
+          <div className="text-sm text-slate-400">{t("common.loading")}</div>
+        )}
+
+        <Legend t={t} />
+        {(phase === "running" || progressLog.length > 0) && (
+          <ProgressFeed t={t} lines={progressLog} />
+        )}
+      </div>
     </div>
   );
 }

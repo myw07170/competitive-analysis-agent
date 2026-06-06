@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import type { DagDef, DagNode, TraceEvent } from "../api/client";
 import type { Locale } from "../i18n";
@@ -47,10 +47,17 @@ const AGENT_COLOR: Record<string, string> = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// LAYOUT KNOB — total width of the flow + decision-trace block once a step is
-// expanded. The block is centered in the card; lower this to make the expanded
-// trace area narrower. Tune this single value (e.g. "70%" – "80%").
-const FLOW_BLOCK_MAX_WIDTH = "78%";
+// LAYOUT KNOBS — tune the two columns independently.
+//
+//   FLOWCHART_WIDTH  width of the left "协作流程图" (collaboration flow) column.
+//   TRACE_WIDTH      width of the right "决策追踪" (decision-trace) column once a
+//                    step is expanded. Use a CSS length (px / rem) — not a
+//                    fraction — so the open/close transition animates smoothly.
+//   COLUMN_GAP       horizontal spacing between the flow column and the trace
+//                    column when expanded ("稍微大一点" → bump this up).
+const FLOWCHART_WIDTH = "240px";
+const TRACE_WIDTH = "600px";
+const COLUMN_GAP = "3rem";
 // ═══════════════════════════════════════════════════════════════════════════
 
 
@@ -154,20 +161,34 @@ export default function AgentFlow({
         </div>
       )}
 
-      <div className="mx-auto" style={{ maxWidth: open ? FLOW_BLOCK_MAX_WIDTH : undefined }}>
-        <div
-          className="grid items-start transition-[grid-template-columns] duration-500 ease-out"
-          style={{
-            justifyContent: "center",
-            gridTemplateColumns: open
-              ? "300px minmax(0, 1fr)"
-              : "300px minmax(0, 0fr)",
-          }}
-        >
-          {/* Flowchart column */}
-          <div className="min-w-0">
-            {dag.nodes.map((n, i) => (
-              <div key={n.id}>
+      {/* One grid ROW per step: left cell = flow step + connector, right cell =
+          that step's decision trace. Because both cells share a row, their tops
+          line up. `items-stretch` lets each cell fill the row height, so:
+          • a trace TALLER than its step stretches the row → the connector grows
+            and the next step slides down to stay aligned (req. 1, case "靠下");
+          • a trace HIGHER than its step is pushed down by the empty right cells
+            of the steps above it (req. 1, case "靠上").
+          Columns/gap are the tunable knobs above. */}
+      <div
+        className="grid items-stretch"
+        style={{
+          justifyContent: "center",
+          columnGap: open ? COLUMN_GAP : "0px",
+          rowGap: "0.5rem",
+          gridTemplateColumns: open
+            ? `${FLOWCHART_WIDTH} ${TRACE_WIDTH}`
+            : `${FLOWCHART_WIDTH} 0px`,
+          transition:
+            "grid-template-columns 500ms ease-out, column-gap 500ms ease-out",
+        }}
+      >
+        {dag.nodes.map((n, i) => {
+          const isLast = i === dag.nodes.length - 1;
+          const showPanel = renderIds.includes(n.id);
+          return (
+            <Fragment key={n.id}>
+              {/* Flow step + growable connector. */}
+              <div className="flex flex-col min-w-0">
                 <NodeBlock
                   n={n}
                   useZh={useZh}
@@ -179,36 +200,32 @@ export default function AgentFlow({
                   onClick={() => toggle(n.id)}
                   t={t}
                 />
-                {i < dag.nodes.length - 1 && (
+                {!isLast && (
                   <Arrow done={(nodeStatus[n.id] || "idle") === "done"} />
                 )}
               </div>
-            ))}
-          </div>
 
-          {/* Decision-trace panels — clipped while collapsed, slide in when open.
-              One panel per expanded step, stacked in pipeline order. */}
-          <div className="overflow-hidden min-w-0">
-            <div className="min-w-[340px] pl-4 space-y-3">
-              {renderIds.map((id) => {
-                const node = dag.nodes.find((n) => n.id === id);
-                if (!node) return null;
-                return (
-                  <TracePanel
-                    key={id}
-                    node={node}
-                    useZh={useZh}
-                    events={eventsByNode[id] || []}
-                    roundOf={roundOf}
-                    totalRounds={totalRounds}
-                    onClose={() => toggle(id)}
-                    t={t}
-                  />
-                );
-              })}
-            </div>
-          </div>
-        </div>
+              {/* This step's decision trace. Empty (no height) when the step
+                  isn't expanded; clipped while the column collapses. The inner
+                  fixed width keeps the panel from reflowing during that slide. */}
+              <div className="overflow-hidden min-w-0">
+                {showPanel && (
+                  <div style={{ width: TRACE_WIDTH }}>
+                    <TracePanel
+                      node={n}
+                      useZh={useZh}
+                      events={eventsByNode[n.id] || []}
+                      roundOf={roundOf}
+                      totalRounds={totalRounds}
+                      onClose={() => toggle(n.id)}
+                      t={t}
+                    />
+                  </div>
+                )}
+              </div>
+            </Fragment>
+          );
+        })}
       </div>
     </div>
   );
@@ -328,18 +345,24 @@ function StatusDot({ status, isActive }: { status: NodeStatus; isActive: boolean
   );
 }
 
+// Connector between two steps. `flex-1` lets it absorb any extra height the
+// row gains when the trace panel on the right is taller than the step — the
+// stem stretches and the arrowhead stays pinned just above the next step.
 function Arrow({ done }: { done: boolean }) {
+  const color = done ? "text-emerald-400" : "text-slate-300";
+  const stem = done ? "bg-emerald-400" : "bg-slate-300";
   return (
-    <div className="flex justify-center py-1" aria-hidden>
-      <svg
-        width="14"
-        height="20"
-        viewBox="0 0 14 20"
-        className={done ? "text-emerald-400" : "text-slate-300"}
-      >
-        <line x1="7" y1="0" x2="7" y2="14" stroke="currentColor" strokeWidth="2" />
+    <div
+      className="flex-1 flex flex-col items-center py-1 min-h-[20px]"
+      aria-hidden
+    >
+      <span
+        className={clsx("flex-1 w-0.5 rounded", stem)}
+        style={{ minHeight: 10 }}
+      />
+      <svg width="14" height="8" viewBox="0 0 14 8" className={clsx("-mt-px", color)}>
         <path
-          d="M2 12 L7 19 L12 12"
+          d="M2 1 L7 7 L12 1"
           fill="none"
           stroke="currentColor"
           strokeWidth="2"

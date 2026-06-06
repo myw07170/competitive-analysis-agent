@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { getReport, getTrace, TraceEvent } from "../api/client";
+import { DagDef, getDag, getReport, getTrace, TraceEvent } from "../api/client";
 import SourceBadge from "../components/SourceBadge";
-import TraceList from "../components/TraceList";
+import AgentFlow, { NodeStatus } from "../components/AgentFlow";
 import ComparisonView from "../components/ComparisonView";
 import { Locale, makeT } from "../i18n";
 
@@ -15,6 +15,7 @@ export default function Report() {
 
   const [report, setReport] = useState<any>(null);
   const [events, setEvents] = useState<TraceEvent[]>([]);
+  const [dag, setDag] = useState<DagDef | null>(null);
   const [tab, setTab] = useState<
     "report" | "comparison" | "competitors" | "trace" | "sources"
   >("report");
@@ -22,6 +23,18 @@ export default function Report() {
   useEffect(() => {
     if (reportId) getReport(reportId).then(setReport).catch(() => {});
   }, [reportId]);
+
+  useEffect(() => {
+    getDag().then(setDag).catch(() => {});
+  }, []);
+
+  // The trace tab reuses the live Agent-flow layout; in a finished report every
+  // stage is, by definition, complete — so light them all up as "done".
+  const allDoneStatus = useMemo<Record<string, NodeStatus>>(() => {
+    const s: Record<string, NodeStatus> = {};
+    for (const n of dag?.nodes || []) s[n.id] = "done";
+    return s;
+  }, [dag]);
 
   useEffect(() => {
     // Prefer the live ?run= param; fall back to the run_id persisted on the
@@ -129,7 +142,19 @@ export default function Report() {
             <CompetitorsTab t={t} report={report} />
           </div>
           <div className={tab === "trace" ? "" : "hidden"}>
-            <TraceList t={t} events={events} />
+            <p className="text-xs text-slate-400 mb-4">{t("flow.click_hint")}</p>
+            {dag ? (
+              <AgentFlow
+                dag={dag}
+                locale={locale}
+                nodeStatus={allDoneStatus}
+                activeNodeId={null}
+                events={events}
+                t={t}
+              />
+            ) : (
+              <div className="text-sm text-slate-400">{t("common.loading")}</div>
+            )}
           </div>
           <div className={tab === "sources" ? "" : "hidden print:block"}>
             <SourcesTab t={t} report={report} />

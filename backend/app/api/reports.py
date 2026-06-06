@@ -29,6 +29,17 @@ async def get_report(report_id: str):
     return report.model_dump(mode="json")
 
 
+@router.delete("/{report_id}")
+async def delete_report(report_id: str):
+    """Delete a report and all of its associated records (including its trace)."""
+    store = get_store()
+    await store.init()
+    deleted = await store.delete_report(report_id)
+    if not deleted:
+        raise HTTPException(404, "report not found")
+    return {"ok": True, "id": report_id}
+
+
 @router.get("/{report_id}/html")
 async def get_report_html(report_id: str, download: int = 0):
     """Return the report as a single self-contained HTML document.

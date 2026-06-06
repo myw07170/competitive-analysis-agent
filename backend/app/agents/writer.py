@@ -62,15 +62,24 @@ class WriterAgent(BaseAgent):
             decision_label=f"write_report({product})",
         )
 
-        sections = [ReportSection.model_validate(s) for s in raw.get("sections", [])]
+        # The collected sources are the canonical, ID-addressable set. Build a
+        # lookup first so each section's "sources" — which the Writer LLM tends
+        # to emit as bare [^src_xxx] ID strings rather than full SourceRef
+        # dicts — can be resolved back to real records instead of blowing up
+        # validation.
+        all_sources = _collect_sources(
+            (competitors + [target_product]) if target_product else competitors
+        )
+        known_by_id = {s.id: s for s in all_sources}
+
+        sections = [
+            _section_from_raw(s, known_by_id) for s in raw.get("sections", [])
+        ]
         # Guarantee multi-competitor coverage: if the writer's narrative
         # mentions fewer than half of competitors, append a deterministic
         # comparison appendix so the user still sees them all.
         sections = _ensure_multi_competitor_coverage(
             sections, competitors, loc, target_product=target_product,
-        )
-        all_sources = _collect_sources(
-            (competitors + [target_product]) if target_product else competitors
         )
         comparison = _build_comparison_matrix(competitors, target_product=target_product)
 
@@ -87,6 +96,53 @@ class WriterAgent(BaseAgent):
             comparison=comparison,
             all_sources=all_sources,
         )
+
+
+def _coerce_source_refs(
+    value, known_by_id: Dict[str, SourceRef]
+) -> List[SourceRef]:
+    """Normalize a section's ``sources`` field into real ``SourceRef`` objects.
+
+    The Writer LLM cites facts via ``[^src_xxx]`` IDs, so it frequently emits a
+    section's ``sources`` as a list of bare ID strings (or ``{"id": "src_xxx"}``
+    stubs) instead of full SourceRef dicts — which fails ``List[SourceRef]``
+    validation. Resolve each entry against the collected sources, falling back
+    to a minimal ref so a citation is never silently dropped.
+    """
+    out: List[SourceRef] = []
+    seen: set[str] = set()
+
+    def _push(ref: SourceRef) -> None:
+        if ref.id not in seen:
+            seen.add(ref.id)
+            out.append(ref)
+
+    for item in value or []:
+        if isinstance(item, SourceRef):
+            _push(item)
+        elif isinstance(item, str):
+            _push(known_by_id.get(item) or SourceRef(id=item))
+        elif isinstance(item, dict):
+            sid = item.get("id")
+            # A bare {"id": ...} stub → prefer the full known record.
+            if sid and len(item) == 1 and sid in known_by_id:
+                _push(known_by_id[sid])
+                continue
+            try:
+                _push(SourceRef.model_validate(item))
+            except Exception:
+                if sid:
+                    _push(known_by_id.get(sid) or SourceRef(id=sid))
+    return out
+
+
+def _section_from_raw(s, known_by_id: Dict[str, SourceRef]) -> ReportSection:
+    """Validate one raw section, tolerating LLM source-ID shorthand."""
+    if isinstance(s, dict):
+        data = dict(s)
+        data["sources"] = _coerce_source_refs(data.get("sources"), known_by_id)
+        return ReportSection.model_validate(data)
+    return ReportSection.model_validate(s)
 
 
 def _collect_sources(competitors: List[CompetitorKnowledge]) -> List[SourceRef]:
