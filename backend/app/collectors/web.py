@@ -1,4 +1,4 @@
-"""Robots-respecting page fetcher with per-host rate limiting."""
+"""遵循 robots、带每主机限速的页面抓取器。"""
 from __future__ import annotations
 
 import asyncio
@@ -44,10 +44,10 @@ async def _respect_rate_limit(host: str) -> None:
 
 
 async def fetch_page(url: str, *, max_chars: int = 8000) -> Optional[FetchedPage]:
-    """Fetch a page, return None on hard failure.
+    """抓取一个页面，硬性失败时返回 None。
 
-    Honors robots.txt, applies a per-host rate limit, extracts plain text
-    via BeautifulSoup, and truncates to ``max_chars`` (with a flag).
+    遵守 robots.txt，应用每主机限速，通过 BeautifulSoup 提取纯文本，
+    并截断到 ``max_chars``（并设置标志位）。
     """
     if not await can_fetch(url):
         log.info(f"blocked by robots: {url}")
@@ -70,7 +70,7 @@ async def fetch_page(url: str, *, max_chars: int = 8000) -> Optional[FetchedPage
 
     content_type = resp.headers.get("content-type", "").lower()
     if "html" not in content_type and "xml" not in content_type:
-        # Probably JSON/PDF/binary — skip
+        # 很可能是 JSON/PDF/二进制 —— 跳过
         return FetchedPage(url=str(resp.url), status_code=resp.status_code,
                            title="", text=resp.text[:max_chars])
 

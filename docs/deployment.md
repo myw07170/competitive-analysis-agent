@@ -1,13 +1,13 @@
-# Deployment Guide
+# 部署指南
 
-## 1. Local development
+## 1. 本地开发
 
-### Prerequisites
+### 依赖环境
 * Python **3.10+**
-* Node **18+**, `pnpm` (or `npm` / `yarn`)
-* A Volcengine Ark account (optional — system also runs in mock mode)
+* Node **18+**、`pnpm`（或 `npm` / `yarn`）
+* 一个火山方舟 Ark 账号（可选——系统同样能以 mock 模式运行）
 
-### Backend
+### 后端
 
 ```powershell
 cd backend
@@ -16,14 +16,14 @@ python -m venv .venv
 pip install -r requirements.txt
 
 Copy-Item .env.example .env
-# Fill in ARK_API_KEY and ARK_MODEL_ID, or leave them blank for mock mode.
+# 填写 ARK_API_KEY 和 ARK_MODEL_ID，或将它们留空以走 mock 模式。
 
 python main.py
 ```
 
-Backend listens on `http://127.0.0.1:8000`. Health check: `GET /api/health`.
+后端监听 `http://127.0.0.1:8000`。健康检查：`GET /api/health`。
 
-### Frontend
+### 前端
 
 ```powershell
 cd frontend
@@ -31,62 +31,62 @@ pnpm install
 pnpm dev
 ```
 
-Frontend on `http://127.0.0.1:5173`. The Vite proxy forwards `/api/*` to the backend, so no CORS configuration is needed for local dev.
+前端运行在 `http://127.0.0.1:5173`。Vite 代理会把 `/api/*` 转发到后端，因此本地开发无需配置 CORS。
 
-### One-shot demo (CLI, no UI)
+### 一键演示（CLI，无界面）
 
 ```powershell
 cd backend
 python -m app.scripts.demo --product "Notion" --market us
 ```
 
-This prints the final JSON report and writes it to `backend/data/reports/`. Useful for screen-recording or for piping into other tools.
+它会打印最终的 JSON 报告并写入 `backend/data/reports/`。适合录屏，或把结果管道传给其他工具。
 
-## 2. Configuration
+## 2. 配置
 
-All configuration is via environment variables (or `.env`). See `backend/.env.example` for the complete list. The most important ones:
+所有配置都通过环境变量（或 `.env`）。完整清单见 `backend/.env.example`。最重要的几项：
 
-| Variable | Default | Purpose |
+| 变量 | 默认值 | 用途 |
 | --- | --- | --- |
-| `ARK_API_KEY` | empty | Volcengine API key |
-| `ARK_MODEL_ID` | empty | Endpoint / model ID (e.g. `ep-202401XX-xxxxx`) |
-| `ARK_BASE_URL` | `https://ark.cn-beijing.volces.com/api/v3` | Ark endpoint |
-| `VOLC_MOCK` | `0` | Set to `1` to force mock mode even with a key |
+| `ARK_API_KEY` | 空 | 火山方舟 API Key |
+| `ARK_MODEL_ID` | 空 | Endpoint / 模型 ID（例如 `ep-202401XX-xxxxx`） |
+| `ARK_BASE_URL` | `https://ark.cn-beijing.volces.com/api/v3` | Ark 接入地址 |
+| `VOLC_MOCK` | `0` | 置为 `1` 可在有 Key 时也强制走 mock 模式 |
 | `SEARCH_PROVIDER` | `none` | `tavily` / `serper` / `bing` / `none` |
-| `MAX_QC_ITERATIONS` | `2` | Maximum rework loops |
-| `MIN_SOURCES_PER_COMPETITOR` | `3` | QC threshold |
-| `COLLECTOR_CONCURRENCY` | `3` | Parallel per-competitor collect/analyze (1 = sequential) |
-| `MIN_CONFIDENCE` | `0.55` | Claims below this trigger confidence-aware re-collection |
-| `SELF_CONSISTENCY_SAMPLES` | `1` | N-sample majority vote on competitor identification (1 = off) |
-| `ENABLE_CONFLICT_DETECTION` | `1` | Cross-source conflict flagging |
-| `RESPECT_ROBOTS` | `1` | Set to `0` only for testing |
+| `MAX_QC_ITERATIONS` | `2` | 最大返工循环次数 |
+| `MIN_SOURCES_PER_COMPETITOR` | `3` | QC 阈值 |
+| `COLLECTOR_CONCURRENCY` | `3` | 每竞品采集 / 分析的并行度（1 = 串行） |
+| `MIN_CONFIDENCE` | `0.55` | 低于此值的断言触发置信度感知的重新采集 |
+| `SELF_CONSISTENCY_SAMPLES` | `1` | 竞品识别的 N 样本多数投票（1 = 关闭） |
+| `ENABLE_CONFLICT_DETECTION` | `1` | 跨来源冲突标记 |
+| `RESPECT_ROBOTS` | `1` | 仅用于测试时才置为 `0` |
 
-### API surface
+### API 一览
 
-| Endpoint | Purpose |
+| 端点 | 用途 |
 | --- | --- |
-| `POST /api/analysis/start` · `GET .../stream/{id}` · `GET .../status/{id}` · `GET .../dag` · `GET .../markets` | Run lifecycle + live SSE + DAG metadata |
-| `POST /api/analysis/resume/{run_id}` | Resume an interrupted run from its last checkpoint |
-| `GET/DELETE /api/reports/{id}` · `GET .../html` | Read / delete / export a report |
-| `PATCH /api/reports/{id}` | Human-in-the-loop field edit (records a `Correction`) |
-| `GET /api/traces/{run_id}` | Decision-trace replay |
-| `GET /api/knowledge/{entities,history,diff}` | Cross-run competitor evolution |
-| `GET /api/meta/{suggestions,corrections}` | Agent self-evaluation + correction feed |
+| `POST /api/analysis/start` · `GET .../stream/{id}` · `GET .../status/{id}` · `GET .../dag` · `GET .../markets` | 运行生命周期 + 实时 SSE + DAG 元数据 |
+| `POST /api/analysis/resume/{run_id}` | 从最近检查点恢复一次被中断的运行 |
+| `GET/DELETE /api/reports/{id}` · `GET .../html` | 读取 / 删除 / 导出报告 |
+| `PATCH /api/reports/{id}` | 人在回路字段编辑（记录一条 `Correction`） |
+| `GET /api/traces/{run_id}` | 决策追踪回放 |
+| `GET /api/knowledge/{entities,history,diff}` | 跨运行的竞品演化 |
+| `GET /api/meta/{suggestions,corrections}` | 智能体自评 + 修正信息流 |
 
-## 3. Production deployment
+## 3. 生产部署
 
-### 3.1 Single-host (recommended for first deploy)
+### 3.1 单机部署（首次部署推荐）
 
 ```
 ┌────────────────────────────┐
 │       Nginx / Caddy        │
-│  Static frontend (built)   │
-│  Reverse-proxy to :8000    │
+│  静态前端（已构建）        │
+│  反向代理到 :8000          │
 └────────────────────────────┘
               │
 ┌────────────────────────────┐
 │   FastAPI (uvicorn)        │
-│   Port 8000                │
+│   端口 8000                │
 └────────────────────────────┘
               │
 ┌────────────────────────────┐
@@ -94,13 +94,13 @@ All configuration is via environment variables (or `.env`). See `backend/.env.ex
 └────────────────────────────┘
 ```
 
-Steps:
+步骤：
 
-1. Build the frontend: `cd frontend && pnpm build`. Output goes to `frontend/dist`.
-2. Configure Nginx to serve `frontend/dist` and proxy `/api/*` to `127.0.0.1:8000`.
-3. Run the backend under a process supervisor (systemd, supervisord, pm2).
+1. 构建前端：`cd frontend && pnpm build`。产物在 `frontend/dist`。
+2. 配置 Nginx 提供 `frontend/dist` 并把 `/api/*` 代理到 `127.0.0.1:8000`。
+3. 在进程守护工具（systemd、supervisord、pm2）下运行后端。
 
-Sample systemd unit (Linux):
+systemd 单元示例（Linux）：
 
 ```ini
 [Unit]
@@ -118,18 +118,18 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-### 3.2 Docker (optional)
+### 3.2 Docker（可选）
 
-A `Dockerfile` is not included by default to keep the repo lean, but the layout is straightforward:
+为保持仓库精简，默认不附带 `Dockerfile`，但布局很直接：
 
 ```dockerfile
-# Stage 1: frontend
+# 阶段 1：前端
 FROM node:20-alpine AS fe
 WORKDIR /app
 COPY frontend/ ./frontend
 RUN cd frontend && npm install && npm run build
 
-# Stage 2: backend
+# 阶段 2：后端
 FROM python:3.11-slim
 WORKDIR /app
 COPY backend/ ./backend
@@ -139,34 +139,34 @@ EXPOSE 8000
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-(Serve `/app/frontend_dist` with Nginx in front, or mount a `StaticFiles` route in FastAPI.)
+（在前面用 Nginx 提供 `/app/frontend_dist`，或在 FastAPI 中挂一个 `StaticFiles` 路由。）
 
-### 3.3 Scaling
+### 3.3 扩容
 
-* **Vertical scale**: increase `--workers` on uvicorn. The run registry is now **persisted to SQLite** (`runs` + `run_checkpoints` tables), so `GET /api/analysis/status` and `/stream` fall back to the database when a run is not in the local worker's memory — status and trace replay survive a restart. The live SSE *push* still requires hitting the worker that owns the in-memory `Tracer` queue; for true multi-worker live streaming, swap that queue for Redis pub/sub.
-* **Resumability**: because every node checkpoints `GraphState`, a run interrupted by a crash/restart can be continued with `POST /api/analysis/resume/{run_id}` instead of restarting from scratch.
-* **Persistent storage**: SQLite is fine for prototype. For production-grade, switch to Postgres — `aiosqlite` ↔ `asyncpg` is mostly mechanical, the table schema is identical.
+* **垂直扩容**：增大 uvicorn 的 `--workers`。运行注册表现已**持久化到 SQLite**（`runs` + `run_checkpoints` 表），因此当某次运行不在本地 worker 的内存中时，`GET /api/analysis/status` 与 `/stream` 会回退到数据库——状态与追踪回放能在重启后存活。实时 SSE 的*推送*仍需命中持有内存中 `Tracer` 队列的那个 worker；要实现真正的多 worker 实时流式，可把该队列替换为 Redis 发布 / 订阅。
+* **可续跑性**：由于每个节点都对 `GraphState` 打检查点，一次因崩溃 / 重启而中断的运行可用 `POST /api/analysis/resume/{run_id}` 继续，而非从头重跑。
+* **持久化存储**：SQLite 对原型足够。生产级别可切换到 Postgres——`aiosqlite` ↔ `asyncpg` 基本是机械替换，表结构一致。
 
-## 4. Observability in production
+## 4. 生产环境中的可观测性
 
-* All log lines are structured (component, level, message). Pipe stderr to your log aggregator.
-* The `/api/traces/{run_id}` endpoint is the source of truth for replay.
-* `report.metrics` contains per-run KPIs that you should ingest into your BI tool to track:
-  * `elapsed_seconds`, `total_tokens`
-  * `schema_completeness`, `avg_sources_per_competitor`
-  * `avg_confidence`, `low_confidence_claims`, `conflict_count`
-  * `qc_iterations`, `rework_count`
-  * `manual_correction_rate`, `corrected_fields`
-* `GET /api/meta/suggestions` exposes cross-run aggregates (field completeness, recurring corrections/conflicts) for the agent self-evaluation dashboard.
+* 所有日志行都是结构化的（组件、级别、消息）。把 stderr 接入你的日志聚合系统。
+* `/api/traces/{run_id}` 端点是回放的真相之源。
+* `report.metrics` 包含每次运行的 KPI，应当摄入你的 BI 工具来跟踪：
+  * `elapsed_seconds`、`total_tokens`
+  * `schema_completeness`、`avg_sources_per_competitor`
+  * `avg_confidence`、`low_confidence_claims`、`conflict_count`
+  * `qc_iterations`、`rework_count`
+  * `manual_correction_rate`、`corrected_fields`
+* `GET /api/meta/suggestions` 暴露跨运行聚合（字段完整度、反复出现的修正 / 冲突），供智能体自评仪表盘使用。
 
-These map directly to the "business loop" metrics the rubric calls out: efficiency (time), coverage (sources), consistency (schema completeness), credibility (avg confidence / conflicts), and **manual-correction rate** — now a first-class metric, recomputed on every human edit via `PATCH /api/reports/{id}`.
+这些直接对应评分细则点名的"业务闭环"指标：效率（时间）、覆盖度（来源）、一致性（schema 完整度）、可信度（平均置信度 / 冲突），以及**人工修正率**——如今它是一等指标，每次人工编辑（`PATCH /api/reports/{id}`）都会重新计算。
 
-## 5. Common issues
+## 5. 常见问题
 
-| Symptom | Likely cause | Fix |
+| 症状 | 可能原因 | 解决办法 |
 | --- | --- | --- |
-| Frontend renders but API calls 404 | Vite proxy mis-targeted | Check `vite.config.ts` proxy `target` matches backend port |
-| `report not found` after a run | Backend restarted between start and finish | SQLite is per-host; in dev that resets on each restart |
-| LLM call returns 401 | Bad key or expired key | Re-issue from the Volcengine console; check `ARK_MODEL_ID` is the endpoint ID, not the model family name |
-| All sources show "llm_prior" | No search backend configured | Set `SEARCH_PROVIDER` and the corresponding key in `.env` |
-| Long runs hit timeout | `ARK_TIMEOUT` too low for your model | Bump to 120s+ for slower models |
+| 前端能渲染，但 API 调用 404 | Vite 代理目标错配 | 检查 `vite.config.ts` 代理 `target` 是否与后端端口一致 |
+| 一次运行后报 `report not found` | 后端在 start 与 finish 之间重启过 | SQLite 是按主机的；开发环境每次重启会重置 |
+| LLM 调用返回 401 | Key 错误或已过期 | 在火山方舟控制台重新签发；检查 `ARK_MODEL_ID` 是 endpoint ID，而非模型族名 |
+| 所有来源都显示 "llm_prior" | 未配置搜索后端 | 在 `.env` 里设置 `SEARCH_PROVIDER` 及对应的 Key |
+| 长时运行触发超时 | `ARK_TIMEOUT` 对你的模型太低 | 对较慢的模型调高到 120s 以上 |

@@ -1,4 +1,4 @@
-"""Final report schema — what the Writer agent produces and the API returns."""
+"""最终报告 schema —— 撰写器智能体产出、并由 API 返回的内容。"""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -17,7 +17,7 @@ class ReportSection(BaseModel):
 
 
 class ComparisonCell(BaseModel):
-    """One cell in a multi-competitor comparison table."""
+    """多竞品对比表中的一个单元格。"""
 
     competitor: str
     value: str = ""
@@ -25,7 +25,7 @@ class ComparisonCell(BaseModel):
 
 
 class ComparisonRow(BaseModel):
-    """One row in a comparison table (one capability / tier / segment, all competitors)."""
+    """对比表中的一行（某个能力 / 档位 / 细分，覆盖所有竞品）。"""
 
     label: str
     category: Optional[str] = None
@@ -33,13 +33,12 @@ class ComparisonRow(BaseModel):
 
 
 class ComparisonMatrix(BaseModel):
-    """Structured multi-competitor comparison — rendered as a real chart/table in the UI.
+    """结构化的多竞品对比 —— 在 UI 中渲染为真正的图表 / 表格。
 
-    Built deterministically from the CompetitorKnowledge records so the comparison
-    is never lost to LLM markdown drift.
+    确定性地从 CompetitorKnowledge 记录构建，因此对比绝不会因 LLM 的 markdown 漂移而丢失。
 
-    The first entry in ``competitors`` is the user's own product when
-    ``self_name`` is set; the frontend renders it in a distinct accent color.
+    当设置了 ``self_name`` 时，``competitors`` 中的第一项是用户自己的产品；
+    前端会用一个独特的强调色渲染它。
     """
 
     competitors: List[str] = Field(default_factory=list)
@@ -69,7 +68,7 @@ class ComparisonMatrix(BaseModel):
 
 
 class ReportMetrics(BaseModel):
-    """Operational metrics surfaced to the UI — closes the business loop."""
+    """呈现给 UI 的运营指标 —— 闭合业务闭环。"""
 
     elapsed_seconds: float = 0.0
     total_tokens: int = 0
@@ -81,7 +80,7 @@ class ReportMetrics(BaseModel):
     avg_sources_per_competitor: float = 0.0
     qc_iterations: int = 0
     rework_count: int = 0
-    # --- credibility / confidence ---
+    # --- 可信度 / 置信度 ---
     avg_confidence: float = Field(
         default=0.0, ge=0.0, le=1.0,
         description="Mean source confidence across everything shipped in the report.",
@@ -92,7 +91,7 @@ class ReportMetrics(BaseModel):
     conflict_count: int = Field(
         default=0, description="Cross-source disagreements detected across the report."
     )
-    # --- human-in-the-loop ---
+    # --- 人在回路 ---
     manual_correction_rate: float = Field(
         default=0.0, ge=0.0, le=1.0,
         description="Fraction of structured claims a human edited after generation. "
@@ -102,10 +101,10 @@ class ReportMetrics(BaseModel):
 
 
 class Correction(BaseModel):
-    """One human edit applied to a generated report (human-in-the-loop).
+    """应用到生成报告上的一次人工编辑（人在回路）。
 
-    Stored both on the report (for audit) and in a global corrections table that
-    feeds the active-learning loop (`app.learning`).
+    既存储在报告上（用于审计），也存储在一个全局修正表中，
+    后者为主动学习闭环（`app.learning`）提供输入。
     """
 
     id: str = Field(default_factory=lambda: f"cor_{uuid4().hex[:10]}")
@@ -120,10 +119,10 @@ class Correction(BaseModel):
 
 
 class SchemaSuggestion(BaseModel):
-    """A data-driven suggestion to evolve the competitor schema (Agent self-eval).
+    """一条用于演进竞品 schema 的数据驱动建议（智能体自评）。
 
-    Produced by ``app.meta.MetaEvaluator`` from aggregate field-completeness and
-    recurring QC findings across historical reports.
+    由 ``app.meta.MetaEvaluator`` 根据历史报告中字段完整度的聚合
+    与反复出现的 QC 结论产出。
     """
 
     field: str
@@ -134,7 +133,7 @@ class SchemaSuggestion(BaseModel):
 
 
 class KnowledgeChange(BaseModel):
-    """A single field-level change between two snapshots of the same competitor."""
+    """同一竞品两个快照之间单个字段级别的变化。"""
 
     path: str
     change: str = Field(description="added | removed | changed")
@@ -143,7 +142,7 @@ class KnowledgeChange(BaseModel):
 
 
 class KnowledgeDiff(BaseModel):
-    """Diff between the two most recent snapshots of one competitor (evolution view)."""
+    """某竞品最近两个快照之间的 diff（演化视图）。"""
 
     entity_key: str
     name: str
@@ -180,10 +179,10 @@ class FinalReport(BaseModel):
     metrics: ReportMetrics = Field(default_factory=ReportMetrics)
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    # All sources used across the report — flattened for the citation panel.
+    # 报告中用到的所有来源 —— 为引用面板扁平化。
     all_sources: List[SourceRef] = Field(default_factory=list)
 
-    # Human-in-the-loop edits applied after generation (audit trail).
+    # 生成后应用的人在回路编辑（审计轨迹）。
     corrections: List[Correction] = Field(default_factory=list)
 
     schema_version: str = "1.1.0"

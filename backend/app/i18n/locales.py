@@ -1,7 +1,7 @@
-"""Server-side locale strings.
+"""服务端 locale 字符串。
 
-The frontend has its own i18n bundle; this one is used by the agents for any
-text they emit into the report (section labels, default headings, etc.).
+前端有自己的 i18n 语言包；这一份由智能体用于它们写入报告的任何文本
+（章节标签、默认标题等）。
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ LOCALES: Dict[str, Dict[str, str]] = {
         "agent.analyst": "分析 Agent",
         "agent.writer": "报告撰写 Agent",
         "agent.qc": "质控 Agent",
-        # ---- HTML / report renderer keys ----
+        # ---- HTML / 报告渲染器相关键 ----
         "form.product.label": "目标产品",
         "report.executive": "执行摘要",
         "report.competitors": "竞品概览",
@@ -69,7 +69,7 @@ LOCALES: Dict[str, Dict[str, str]] = {
         "agent.analyst": "Analyst Agent",
         "agent.writer": "Writer Agent",
         "agent.qc": "QC Agent",
-        # ---- HTML / report renderer keys ----
+        # ---- HTML / 报告渲染器相关键 ----
         "form.product.label": "Target product",
         "report.executive": "Executive Summary",
         "report.competitors": "Competitors at a glance",

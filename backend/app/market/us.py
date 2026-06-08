@@ -1,4 +1,4 @@
-"""US market profile."""
+"""美国市场画像。"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field

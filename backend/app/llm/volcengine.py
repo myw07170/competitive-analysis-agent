@@ -1,11 +1,11 @@
-"""Volcengine Ark LLM client.
+"""火山方舟 Ark LLM 客户端。
 
-Ark exposes an OpenAI-compatible REST API. We wrap it with:
+Ark 暴露一个 OpenAI 兼容的 REST API。我们对它封装了：
 
-* tenacity-based retries (exponential backoff, idempotent only)
-* token-accounting per call (rolled up into the trace)
-* a mock mode that returns canned structured output keyed by ``intent``
-  — so the full DAG / trace / report UI is demonstrable even without a key.
+* 基于 tenacity 的重试（指数退避，仅幂等情况）
+* 每次调用的 token 计量（汇总进追踪）
+* 一个按 ``intent`` 索引返回预设结构化输出的 mock 模式
+  —— 因此即便没有 Key，完整的 DAG / 追踪 / 报告界面也可演示。
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt,
 
 from ..config import Settings, get_settings
 from ..observability.logger import get_logger
-from . import mocks as _mocks  # noqa: F401  (registered below)
+from . import mocks as _mocks  # noqa: F401  （在下方注册）
 
 log = get_logger("llm.ark")
 
@@ -40,12 +40,12 @@ class LLMError(RuntimeError):
 
 
 class LLMClient:
-    """Thin async wrapper around the Ark /chat/completions endpoint."""
+    """对 Ark /chat/completions 端点的轻量异步封装。"""
 
     def __init__(self, settings: Optional[Settings] = None) -> None:
         self.settings = settings or get_settings()
 
-    # ---- Public API ----
+    # ---- 公共 API ----
     async def chat_json(
         self,
         *,
@@ -56,10 +56,10 @@ class LLMClient:
         max_tokens: int = 2048,
         extra_messages: Optional[List[Dict[str, str]]] = None,
     ) -> LLMResponse:
-        """Call the model and expect a JSON object back.
+        """调用模型并期望返回一个 JSON 对象。
 
-        ``intent`` is purely diagnostic — used by the mock backend and trace
-        labels. It does not affect the real API call.
+        ``intent`` 纯属诊断用途 —— 供 mock 后端和追踪标签使用。
+        它不影响真实的 API 调用。
         """
         if self.settings.use_mock_llm:
             payload = _mocks.respond(intent, system=system, user=user)
@@ -124,7 +124,7 @@ class LLMClient:
                         mocked=False,
                     )
 
-        # Unreachable — AsyncRetrying re-raises on exhaustion.
+        # 不可达 —— AsyncRetrying 在重试耗尽时会重新抛出异常。
         raise LLMError("LLM call exhausted retries")
 
 

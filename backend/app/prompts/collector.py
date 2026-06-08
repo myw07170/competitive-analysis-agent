@@ -1,4 +1,4 @@
-"""Collector-agent prompts. Bilingual: a {language} placeholder selects the response language."""
+"""采集器智能体 prompt。双语：{language} 占位符用于选择响应语言。"""
 
 COLLECTOR_SYSTEM = """\
 You are the **Collector Agent** in a multi-agent competitive-analysis system.

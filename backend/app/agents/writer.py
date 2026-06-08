@@ -1,4 +1,4 @@
-"""Writer Agent — turns analyzed competitor knowledge into a final report."""
+"""撰写器智能体 —— 把分析后的竞品知识转化为最终报告。"""
 from __future__ import annotations
 
 import json
@@ -67,11 +67,10 @@ class WriterAgent(BaseAgent):
             decision_label=f"write_report({product})",
         )
 
-        # The collected sources are the canonical, ID-addressable set. Build a
-        # lookup first so each section's "sources" — which the Writer LLM tends
-        # to emit as bare [^src_xxx] ID strings rather than full SourceRef
-        # dicts — can be resolved back to real records instead of blowing up
-        # validation.
+        # 采集到的来源是标准的、可按 ID 寻址的集合。先建立一个查找表，
+        # 这样每个章节的 "sources" —— 撰写器 LLM 倾向于把它写成裸的
+        # [^src_xxx] ID 字符串而非完整的 SourceRef 字典 —— 才能被解析回真实记录，
+        # 而不是导致校验失败。
         all_sources = _collect_sources(
             (competitors + [target_product]) if target_product else competitors
         )
@@ -80,9 +79,8 @@ class WriterAgent(BaseAgent):
         sections = [
             _section_from_raw(s, known_by_id) for s in raw.get("sections", [])
         ]
-        # Guarantee multi-competitor coverage: if the writer's narrative
-        # mentions fewer than half of competitors, append a deterministic
-        # comparison appendix so the user still sees them all.
+        # 保证多竞品覆盖：若撰写器的叙述提及的竞品不足一半，
+        # 则追加一个确定性的对比附录，使用户仍能看到全部竞品。
         sections = _ensure_multi_competitor_coverage(
             sections, competitors, loc, target_product=target_product,
         )
@@ -106,13 +104,12 @@ class WriterAgent(BaseAgent):
 def _coerce_source_refs(
     value, known_by_id: Dict[str, SourceRef]
 ) -> List[SourceRef]:
-    """Normalize a section's ``sources`` field into real ``SourceRef`` objects.
+    """把一个章节的 ``sources`` 字段归一化为真正的 ``SourceRef`` 对象。
 
-    The Writer LLM cites facts via ``[^src_xxx]`` IDs, so it frequently emits a
-    section's ``sources`` as a list of bare ID strings (or ``{"id": "src_xxx"}``
-    stubs) instead of full SourceRef dicts — which fails ``List[SourceRef]``
-    validation. Resolve each entry against the collected sources, falling back
-    to a minimal ref so a citation is never silently dropped.
+    撰写器 LLM 通过 ``[^src_xxx]`` ID 引用事实，因此它常把章节的 ``sources``
+    写成一列裸 ID 字符串（或 ``{"id": "src_xxx"}`` 残桩）而非完整的 SourceRef 字典
+    —— 这会导致 ``List[SourceRef]`` 校验失败。把每一项对照采集到的来源解析，
+    并回退到一个最小化的 ref，使引用绝不会被默默丢弃。
     """
     out: List[SourceRef] = []
     seen: set[str] = set()
@@ -129,7 +126,7 @@ def _coerce_source_refs(
             _push(known_by_id.get(item) or SourceRef(id=item))
         elif isinstance(item, dict):
             sid = item.get("id")
-            # A bare {"id": ...} stub → prefer the full known record.
+            # 一个裸的 {"id": ...} 残桩 → 优先使用完整的已知记录。
             if sid and len(item) == 1 and sid in known_by_id:
                 _push(known_by_id[sid])
                 continue
@@ -142,7 +139,7 @@ def _coerce_source_refs(
 
 
 def _section_from_raw(s, known_by_id: Dict[str, SourceRef]) -> ReportSection:
-    """Validate one raw section, tolerating LLM source-ID shorthand."""
+    """校验一个原始章节，容忍 LLM 的来源 ID 简写形式。"""
     if isinstance(s, dict):
         data = dict(s)
         data["sources"] = _coerce_source_refs(data.get("sources"), known_by_id)
@@ -183,7 +180,7 @@ def _collect_sources(competitors: List[CompetitorKnowledge]) -> List[SourceRef]:
 
 
 # ---------------------------------------------------------------------------
-# Multi-competitor coverage helpers
+# 多竞品覆盖辅助函数
 # ---------------------------------------------------------------------------
 def _ensure_multi_competitor_coverage(
     sections: List[ReportSection],
@@ -191,11 +188,11 @@ def _ensure_multi_competitor_coverage(
     loc: Dict[str, str],
     target_product: Optional[CompetitorKnowledge] = None,
 ) -> List[ReportSection]:
-    """If the writer's prose under-covers competitors, append a deterministic
-    multi-competitor appendix so the user always sees every competitor.
+    """若撰写器的正文对竞品覆盖不足，则追加一个确定性的多竞品附录，
+    使用户始终能看到每一个竞品。
 
-    When ``target_product`` is provided it is included as the first column so
-    the snapshot puts the user's own product side-by-side with competitors.
+    当提供了 ``target_product`` 时，它会作为第一列纳入，使该快照把用户自己的
+    产品与竞品并排呈现。
     """
     if len(competitors) <= 1 or not sections:
         return sections
@@ -206,7 +203,7 @@ def _ensure_multi_competitor_coverage(
     names = [c.name for c in all_items]
     joined_body = " \n".join(s.body_md or "" for s in sections)
     mentions = sum(1 for n in names if n and n in joined_body)
-    # If at least 60% of competitors are referenced, trust the writer's output.
+    # 若至少引用了 60% 的竞品，则信任撰写器的输出。
     if mentions >= max(2, int(len(names) * 0.6)):
         return sections
 
@@ -244,16 +241,16 @@ def _cheapest_tier_label(c: CompetitorKnowledge) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Structured comparison matrix (deterministic — independent of LLM markdown)
+# 结构化对比矩阵（确定性 —— 独立于 LLM 的 markdown）
 # ---------------------------------------------------------------------------
 def _build_comparison_matrix(
     competitors: List[CompetitorKnowledge],
     target_product: Optional[CompetitorKnowledge] = None,
 ) -> ComparisonMatrix:
-    """Build the structured comparison.
+    """构建结构化对比。
 
-    When ``target_product`` is provided it is prepended as the first column so
-    every chart / table contains the user's own product alongside competitors.
+    当提供了 ``target_product`` 时，它会作为第一列前置，使每张图表 / 表格都
+    包含用户自己的产品与竞品并列。
     """
     all_items: List[CompetitorKnowledge] = (
         ([target_product] + competitors) if target_product else competitors
@@ -299,7 +296,7 @@ def _walk_leaves(node: FunctionNode, out: List[FunctionNode]) -> None:
 
 
 def _build_feature_rows(competitors: List[CompetitorKnowledge]) -> List[ComparisonRow]:
-    """Aggregate top features across all competitors and check which have each."""
+    """汇总所有竞品中最主要的功能，并检查每个竞品是否具备各项功能。"""
     feature_per_competitor: Dict[str, set[str]] = {}
     counter: Counter[str] = Counter()
     for c in competitors:
@@ -315,7 +312,7 @@ def _build_feature_rows(competitors: List[CompetitorKnowledge]) -> List[Comparis
             counter[label.lower()] += 1
         feature_per_competitor[c.name] = names_norm
 
-    # Take the top ~10 most-shared / most-mentioned features.
+    # 取最共有 / 最常被提及的约 10 个功能。
     top = [f for f, _ in counter.most_common(10)]
     if not top:
         return []
@@ -335,7 +332,7 @@ def _build_feature_rows(competitors: List[CompetitorKnowledge]) -> List[Comparis
 
 
 def _build_pricing_rows(competitors: List[CompetitorKnowledge]) -> List[ComparisonRow]:
-    # Group tiers by a normalized canonical bucket.
+    # 按归一化的标准分组把档位归类。
     canonical_order = ["Free", "Starter", "Pro", "Business", "Enterprise"]
 
     def _bucket(name: str) -> str:
@@ -367,7 +364,7 @@ def _build_pricing_rows(competitors: List[CompetitorKnowledge]) -> List[Comparis
                 cell = tier.name or "—"
             by_competitor[c.name].setdefault(b, cell)
 
-    # Stable ordering: canonical first, then any extras alphabetically.
+    # 稳定排序：标准分组在前，其余额外项按字母序。
     ordered = [b for b in canonical_order if b in buckets_seen] + sorted(
         b for b in buckets_seen if b not in canonical_order
     )
@@ -411,29 +408,29 @@ _KEYWORD_RE = re.compile(r"[A-Za-z0-9_一-鿿][A-Za-z0-9_一-鿿\- ]{1,28}")
 
 
 def _extract_keywords(c: CompetitorKnowledge) -> List[str]:
-    """Pick 5–8 short, high-signal phrases for the keyword card."""
+    """为关键词卡片挑选 5~8 个简短、高信息量的短语。"""
     bag: List[str] = []
     if c.market_position:
         bag.append(c.market_position[:40])
 
-    # SWOT strengths give the strongest signal.
+    # SWOT 的优势项给出最强的信号。
     if c.swot:
         for item in c.swot.strengths[:3]:
             bag.append(item.value[:40])
         for item in c.swot.opportunities[:1]:
             bag.append(item.value[:40])
 
-    # Top-level function categories.
+    # 顶层功能类别。
     for node in c.function_tree.nodes[:3]:
         bag.append(node.name)
 
-    # Primary segment / first segment.
+    # 主要细分 / 第一个细分。
     if c.user_profile.primary_segment:
         bag.append(c.user_profile.primary_segment[:30])
     for s in c.user_profile.segments[:1]:
         bag.append(s.name)
 
-    # Dedup, drop empties, cap at 8.
+    # 去重、去空、上限 8 个。
     out: List[str] = []
     seen: set[str] = set()
     for raw in bag:

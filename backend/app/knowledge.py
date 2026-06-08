@@ -1,13 +1,12 @@
-"""Cross-run competitor knowledge evolution (Innovation-3).
+"""跨运行的竞品知识演化（创新点 3）。
 
-Each run stores a snapshot of every competitor keyed by a normalized entity key
-(see ``app.storage.store.normalize_entity_key``). ``compute_diff`` lines up the
-two most recent snapshots and produces a field-level :class:`KnowledgeDiff` —
-"what changed since we last looked at this competitor": new/removed capabilities,
-pricing moves, segment shifts, positioning changes.
+每次运行都会按归一化的实体键（见 ``app.storage.store.normalize_entity_key``）
+存储每个竞品的快照。``compute_diff`` 对齐最近的两个快照，产出一个字段级的
+:class:`KnowledgeDiff` —— "自上次查看该竞品以来发生了什么变化"：新增 / 移除的能力、
+定价变动、细分迁移、定位改变。
 
-This is deliberately a deterministic structural diff (no embeddings) so it is
-explainable and cheap; entity resolution is the normalized-key step upstream.
+这刻意是一个确定性的结构化 diff（不用嵌入），因此可解释且廉价；实体消歧由上游的
+归一化键这一步完成。
 """
 from __future__ import annotations
 
@@ -64,7 +63,7 @@ def compute_diff(
     *, entity_key: str, name: str, market: str,
     latest: Dict[str, Any], previous: Optional[Dict[str, Any]],
 ) -> KnowledgeDiff:
-    """Build a KnowledgeDiff from two snapshot rows (each ``{run_id, captured_at, payload}``)."""
+    """从两条快照记录（每条 ``{run_id, captured_at, payload}``）构建一个 KnowledgeDiff。"""
     cur = CompetitorKnowledge.model_validate(latest["payload"])
     diff = KnowledgeDiff(
         entity_key=entity_key, name=name, market=market,

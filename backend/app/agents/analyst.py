@@ -1,4 +1,4 @@
-"""Analyst Agent — produces SWOT for one competitor at a time."""
+"""分析师智能体 —— 一次为一个竞品产出 SWOT。"""
 from __future__ import annotations
 
 import json

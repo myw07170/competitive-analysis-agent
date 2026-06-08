@@ -1,4 +1,4 @@
-"""Agent system prompts, externalized so they're easy to audit and tune."""
+"""智能体系统 prompt，外置以便审计与调优。"""
 from .collector import (
     IDENTIFY_COMPETITORS_USER,
     GATHER_COMPETITOR_USER,

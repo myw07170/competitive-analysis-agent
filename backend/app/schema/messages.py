@@ -1,7 +1,7 @@
-"""Structured agent-to-agent message protocol.
+"""结构化的智能体间消息协议。
 
-All inter-agent communication uses these typed envelopes — never raw natural
-language. This is the "function-calling style" constraint from the scoring rubric.
+所有智能体间通信都使用这些带类型的信封 —— 绝不用裸自然语言。
+这正是评分细则中"类函数调用风格"的约束。
 """
 from __future__ import annotations
 
@@ -22,14 +22,14 @@ class AgentRole(str, Enum):
 
 
 class Severity(str, Enum):
-    BLOCKER = "blocker"      # must rework
-    MAJOR = "major"           # should rework
-    MINOR = "minor"           # nice-to-fix, will not trigger rework
+    BLOCKER = "blocker"      # 必须返工
+    MAJOR = "major"           # 应当返工
+    MINOR = "minor"           # 可改可不改，不会触发返工
     INFO = "info"
 
 
 class AgentMessage(BaseModel):
-    """Envelope for one message between agents."""
+    """智能体间一条消息的信封。"""
 
     id: str = Field(default_factory=lambda: f"msg_{uuid4().hex[:10]}")
     sender: AgentRole
@@ -46,7 +46,7 @@ class AgentMessage(BaseModel):
 
 
 class QCFinding(BaseModel):
-    """One issue raised by the QC agent."""
+    """QC 智能体提出的一个问题。"""
 
     id: str = Field(default_factory=lambda: f"qcf_{uuid4().hex[:8]}")
     target_agent: AgentRole
@@ -59,7 +59,7 @@ class QCFinding(BaseModel):
 
 
 class QCReport(BaseModel):
-    """Output of the QC agent for one iteration."""
+    """QC 智能体一次迭代的输出。"""
 
     iteration: int
     findings: List[QCFinding] = Field(default_factory=list)

@@ -1,70 +1,70 @@
-# Demo Video Script
+# 演示视频脚本
 
-A suggested ~3-minute walkthrough for the submission video.
+为提交视频准备的约 3 分钟讲解建议。
 
-## Setup (off-camera, before recording)
+## 准备（录制前，镜头外）
 
-1. `cd backend && python main.py` — backend on `:8000`.
-2. `cd frontend && pnpm dev` — frontend on `:5173`.
-3. Set `VOLC_MOCK=1` if you don't want live LLM calls during recording. The same UI works either way.
-4. Open `http://127.0.0.1:5173` in a clean browser window.
+1. `cd backend && python main.py` —— 后端在 `:8000`。
+2. `cd frontend && pnpm dev` —— 前端在 `:5173`。
+3. 若不想在录制时进行实时 LLM 调用，设置 `VOLC_MOCK=1`。无论哪种方式，同一套 UI 都能用。
+4. 在一个干净的浏览器窗口中打开 `http://127.0.0.1:5173`。
 
-## Scene 1 — Project intro (0:00 – 0:20)
+## 场景 1 —— 项目介绍（0:00 – 0:20）
 
-> "This is a multi-agent competitive-analysis system. A user picks a product and a market — China or the US — and four specialized AI agents collaborate to produce a structured, source-traceable competitive report. The interface, the prompts, and the output all switch language based on the market."
+> "这是一个多智能体竞品分析系统。用户选择一个产品和一个市场——中国或美国——四个专职 AI 智能体协作产出一份结构化、可溯源的竞品报告。界面、prompt 和输出都会随市场切换语言。"
 
-Show: the home screen, the form, the market chips.
+展示：首页、表单、市场选项。
 
-## Scene 2 — Start an analysis (0:20 – 0:45)
+## 场景 2 —— 启动一次分析（0:20 – 0:45）
 
-Type `Notion` in the product field. Click the 🇺🇸 US market chip. Click "Start analysis".
+在产品字段输入 `Notion`。点击 🇺🇸 美国市场选项。点击"开始分析"。
 
-> "I'm asking it to analyze Notion against US competitors. Watch the DAG."
+> "我让它针对美国竞品分析 Notion。看这个 DAG。"
 
-The DAG animates: `identify` lights up, then `collect`, then `analyze`, then `write`, then `qc`.
+DAG 开始动画：`identify` 点亮，接着 `collect`、`analyze`、`write`、`qc`。
 
-## Scene 3 — The feedback loop (0:45 – 1:15)
+## 场景 3 —— 反馈闭环（0:45 – 1:15）
 
-When QC fires, point at the visualization.
+当 QC 触发时，指向可视化。
 
-> "Notice the QC agent didn't approve on the first pass — it found two pricing tiers with only one source each. That's below our threshold. So the DAG re-routes back to the Collector with the specific findings injected into its next prompt. The Collector reruns, this time targeting the gaps."
+> "注意，QC 智能体在第一遍并没有通过——它发现两个定价档位各自只有一个来源。这低于我们的阈值。于是 DAG 把具体结论注入采集器的下一个 prompt，并重新路由回采集器。采集器重跑，这次针对这些缺口。"
 
-Show: the dashed red `rework` edge highlighting, the second pass of `collect` running.
+展示：红色虚线 `rework` 边高亮、第二遍 `collect` 在运行。
 
-> "On the second iteration, QC approves. This is a real loop — the second-pass output is measurably different from the first, not a pseudo-loop."
+> "在第二次迭代中，QC 通过了。这是一个真实的循环——第二遍的输出与第一遍可度量地不同，而不是一个伪循环。"
 
-## Scene 4 — Report tour (1:15 – 2:00)
+## 场景 4 —— 报告巡览（1:15 – 2:00）
 
-The report opens automatically. Walk through the tabs.
+报告自动打开。逐个标签页讲解。
 
-1. **Report tab** — executive summary + market overview + function / pricing / user comparison + SWOT + recommendations. All in English because we picked the US market.
-2. **Competitors tab** — per-competitor cards. Click a pricing tier's source badge to show that prices are traced to a real URL.
-3. **Sources tab** — flat list of every source used. Each is a clickable link.
-4. **Run metrics** (top of the page) — schema completeness, total tokens, QC iterations, rework count. These are the business-loop KPIs.
+1. **报告标签页** —— 执行摘要 + 市场综述 + 功能 / 定价 / 用户对比 + SWOT + 建议。因为我们选了美国市场，全部是英文。
+2. **竞品标签页** —— 每个竞品的卡片。点击某定价档位的来源徽标，展示价格可溯源到真实 URL。
+3. **来源标签页** —— 用过的所有来源的扁平列表。每个都是可点击的链接。
+4. **运行指标**（页面顶部） —— schema 完整度、总 token、QC 迭代次数、返工次数。这些是业务闭环 KPI。
 
-## Scene 5 — Trace replay (2:00 – 2:30)
+## 场景 5 —— 追踪回放（2:00 – 2:30）
 
-Click the **Trace** tab.
+点击 **Trace** 标签页。
 
-> "Every agent decision is recorded. I can click any row to see the exact prompt, the exact input, and the exact JSON output. This is the audit trail — useful for debugging, useful for compliance, useful for tuning."
+> "每个智能体决策都被记录。我可以点击任意一行，查看确切的 prompt、确切的输入、确切的 JSON 输出。这就是审计轨迹——对调试有用、对合规有用、对调优有用。"
 
-Click a `collector.gather_competitor` row, expand the response, scroll through the JSON.
+点击一个 `collector.gather_competitor` 行，展开响应，滚动浏览 JSON。
 
-## Scene 6 — Switch language (2:30 – 2:50)
+## 场景 6 —— 切换语言（2:30 – 2:50）
 
-Back to home. Type `飞书`. Click 🇨🇳 China. Start.
+回到首页。输入 `飞书`。点击 🇨🇳 中国。开始。
 
-> "Same code path, different market. Interface and report switch to Chinese, the search backend switches to a CN-tuned provider, and the agents draw on a different set of allowed source domains."
+> "同一条代码路径，不同的市场。界面和报告切换为中文，搜索后端切换为针对 CN 调优的服务商，智能体取用一套不同的允许来源域名。"
 
-Watch the same DAG animate.
+观看同一个 DAG 的动画。
 
-## Scene 7 — Wrap (2:50 – 3:00)
+## 场景 7 —— 收尾（2:50 – 3:00）
 
-> "Four agents. Real feedback loop. Strict schema. Source-traceable output. Pluggable markets. Observable end-to-end. That's the system."
+> "四个智能体。真实的反馈闭环。严格的 schema。可溯源的输出。可插拔的市场。端到端可观测。这就是这个系统。"
 
-## Talking points if asked
+## 若被提问的讲解要点
 
-* **Why LangGraph?** State machine + conditional edges + visualization. The `rework` edge being a first-class graph element is what makes the loop auditable.
-* **Why Pydantic?** Structured messaging between agents has to be enforced — natural-language hand-offs lose accuracy at every hop.
-* **Why mock mode?** Robust demos, offline development, regression tests that don't hit the network.
-* **How would you extend to a new market?** Three small files; the docs (`docs/extension.md`) walk through it in detail. No changes to agents or orchestrator.
+* **为什么用 LangGraph？** 状态机 + 条件边 + 可视化。`rework` 边作为一等图元素，正是让循环可审计的关键。
+* **为什么用 Pydantic？** 智能体间的结构化消息传递必须被强制执行——自然语言交接在每一跳都会损失准确度。
+* **为什么要 mock 模式？** 稳健的演示、离线开发、不触网的回归测试。
+* **如何扩展到新市场？** 三个小文件；文档（`docs/extension.md`）详细演示了全过程。无需改动智能体或编排器。

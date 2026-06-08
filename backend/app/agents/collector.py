@@ -1,11 +1,10 @@
-"""Collector Agent.
+"""采集器智能体。
 
-Two-step:
-1. ``identify_competitors`` — get the top-3 list (with optional self-consistency
-   voting across N samples).
-2. ``gather_competitor``    — for each, produce a CompetitorKnowledge, grounded
-   in web evidence when a search backend is configured, and steered by any QC
-   rework notes plus accumulated human-correction guidance (active learning).
+两步：
+1. ``identify_competitors`` —— 获取 top-3 列表（可选地在 N 个样本间做自一致性投票）。
+2. ``gather_competitor``    —— 对每个竞品产出一个 CompetitorKnowledge；当配置了
+   搜索后端时以网页证据为基础，并受任何 QC 返工备注以及累积的人工修正引导
+   （主动学习）的引导。
 """
 from __future__ import annotations
 
@@ -50,9 +49,8 @@ class CollectorAgent(BaseAgent):
         if samples_n <= 1:
             return await _one(temperature=0.2)
 
-        # Self-consistency: draw N samples at higher temperature, keep the
-        # competitors a majority of samples agree on (more robust to one-off
-        # hallucinations than a single greedy answer).
+        # 自一致性：在较高温度下抽取 N 个样本，保留多数样本一致认同的竞品
+        # （比单次贪心答案更能抵抗一次性的幻觉）。
         all_names: List[List[str]] = []
         raw_by_name: Dict[str, Dict] = {}
         for i in range(samples_n):
@@ -79,7 +77,7 @@ class CollectorAgent(BaseAgent):
             f"\n[Previous QC findings to address in this rework iteration]:\n{rework_notes}\n"
             if rework_notes else ""
         )
-        # Active learning: fold in lessons learned from past human corrections.
+        # 主动学习：纳入从过往人工修正中提炼的经验教训。
         guidance = await recent_guidance(self.market.code)
         sys_prompt = COLLECTOR_SYSTEM.format(language=self.language_name) + guidance
         user_prompt = GATHER_COMPETITOR_USER.format(
@@ -100,14 +98,13 @@ class CollectorAgent(BaseAgent):
             max_tokens=8192,
             decision_label=f"gather({competitor_name}, it={iteration})",
         )
-        # Pydantic validation — fail loud rather than ship broken data downstream.
+        # Pydantic 校验 —— 宁可显式报错，也不把损坏的数据带到下游。
         return CompetitorKnowledge.model_validate(raw)
 
     async def _build_evidence(self, product: str, competitor_name: str) -> str:
-        """Search + optional page-fetch, return a markdown evidence block.
+        """搜索 + 可选的页面抓取，返回一个 markdown 证据块。
 
-        Falls back to an empty string when no search backend is configured —
-        the LLM then falls back to its prior knowledge.
+        未配置搜索后端时回退为空字符串 —— LLM 随后回退到它的先验知识。
         """
         settings = get_settings()
         if settings.search_provider == "none":
@@ -126,7 +123,7 @@ class CollectorAgent(BaseAgent):
         if not all_hits:
             return "[Search returned no hits.]"
 
-        # Light page fetch on the top 2 hits to enrich snippets.
+        # 对前 2 条命中做轻量页面抓取以丰富摘要。
         enriched: List[str] = []
         for h in all_hits[:2]:
             page = await fetch_page(h.url, max_chars=1500)

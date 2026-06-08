@@ -1,4 +1,4 @@
-"""Static metadata about the DAG — what the frontend renders."""
+"""关于 DAG 的静态元数据 —— 供前端渲染。"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -30,14 +30,13 @@ class DagNode:
 class DagEdge:
     src: str
     dst: str
-    condition: str = ""   # human-readable condition label (e.g. "rework")
+    condition: str = ""   # 人类可读的条件标签（例如 "rework"）
 
 
 def dag_definition() -> dict:
-    """Static DAG layout used by the frontend ``DAGFlow`` component.
+    """前端 ``DAGFlow`` 组件使用的静态 DAG 布局。
 
-    Conditional edges (QC → rework / approve) are represented as separate
-    edges; the runtime decides which one fires.
+    条件边（QC → 返工 / 通过）被表示为独立的边；由运行时决定哪一条触发。
     """
     nodes: List[DagNode] = [
         DagNode("identify", "识别竞品", "Identify competitors", "collector",
@@ -58,7 +57,7 @@ def dag_definition() -> dict:
         DagEdge("collect", "analyze"),
         DagEdge("analyze", "write"),
         DagEdge("write", "qc"),
-        # Role-targeted rework: QC re-enters at whichever stage owns the defect.
+        # 按角色定向的返工：QC 从拥有该缺陷的那个阶段重新进入。
         DagEdge("qc", "collect", "rework→collector"),
         DagEdge("qc", "analyze", "rework→analyst"),
         DagEdge("qc", "write", "rework→writer"),

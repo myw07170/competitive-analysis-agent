@@ -1,7 +1,7 @@
-"""Tiny robots.txt enforcer.
+"""极简的 robots.txt 强制器。
 
-We deliberately do not pull in `protego` or the like — for our usage pattern
-(occasional checks, friendly cache) the stdlib ``urllib.robotparser`` is plenty.
+我们刻意不引入 `protego` 之类的库 —— 对我们的使用模式（偶发检查、友好缓存），
+标准库的 ``urllib.robotparser`` 已经足够。
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ async def _load(host_base: str) -> RobotFileParser:
         return parser
     lock = _LOCKS.setdefault(host_base, asyncio.Lock())
     async with lock:
-        # Double-checked: another coroutine may have populated while we waited.
+        # 双重检查：在我们等待期间，可能已有另一个协程填充了缓存。
         parser = _CACHE.get(host_base)
         if parser is not None:
             return parser
@@ -38,7 +38,7 @@ async def _load(host_base: str) -> RobotFileParser:
                 resp = await client.get(parser.url,
                                         headers={"User-Agent": get_settings().user_agent})
                 if resp.status_code >= 400:
-                    parser.parse([])     # treat as allow-all
+                    parser.parse([])     # 视为全部允许
                 else:
                     parser.parse(resp.text.splitlines())
         except Exception as exc:

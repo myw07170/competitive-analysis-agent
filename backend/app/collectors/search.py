@@ -1,8 +1,7 @@
-"""Pluggable web-search backend.
+"""可插拔的网络搜索后端。
 
-Implements three providers (Tavily, Serper, Bing). All return a uniform
-``SearchHit``. If no provider is configured (or its key is missing), we
-return an empty list and the agent falls back to LLM-only collection.
+实现了三个服务商（Tavily、Serper、Bing）。它们都返回统一的 ``SearchHit``。
+若未配置任何服务商（或缺少其 Key），则返回空列表，智能体回退到仅 LLM 的采集。
 """
 from __future__ import annotations
 

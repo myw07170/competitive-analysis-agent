@@ -1,18 +1,15 @@
-"""Quality Control Agent.
+"""质量控制智能体。
 
-Combines deterministic schema/structure checks with an LLM critique pass. The
-deterministic checks are cheap, reproducible, and — crucially — *route to the
-right upstream agent*:
+把确定性的 schema / 结构检查与一次 LLM 批评结合起来。确定性检查廉价、可复现，
+而且——关键在于——*会路由到正确的上游智能体*：
 
-* Collector findings   → missing fields, too few sources, placeholder URLs,
-  low-confidence claims (confidence-aware), cross-source conflicts.
-* Analyst findings     → missing / empty / unsourced SWOT.
-* Writer findings      → empty executive summary, broken citations, competitors
-  not covered in the narrative.
+* 采集器结论   → 缺失字段、来源过少、占位 URL、
+  低置信度断言（置信度感知）、跨来源冲突。
+* 分析师结论   → 缺失 / 为空 / 无来源的 SWOT。
+* 撰写器结论   → 空执行摘要、断链引用、叙述中未覆盖的竞品。
 
-QC reviews not just the collected knowledge but the *final report* too, so the
-feedback loop can send work back to the Collector, the Analyst, OR the Writer —
-whichever actually owns the defect.
+QC 不仅审查采集到的知识，也审查*最终报告*，因此反馈闭环可以把工作退回给
+采集器、分析师或撰写器 —— 取决于究竟是谁对该缺陷负责。
 """
 from __future__ import annotations
 
@@ -51,15 +48,15 @@ class QCAgent(BaseAgent):
     ) -> QCReport:
         settings = get_settings()
 
-        # Labelled items: competitors keep their indexed path; the user's own
-        # product is checked under the 'target_product' prefix.
+        # 带标签的条目：竞品保留其带索引的路径；用户自己的产品
+        # 在 'target_product' 前缀下检查。
         labelled: List[Tuple[str, CompetitorKnowledge]] = [
             (f"competitors[{i}]", c) for i, c in enumerate(competitors)
         ]
         if target_product is not None:
             labelled.append(("target_product", target_product))
 
-        # 1) Deterministic checks — cheap, reproducible, role-routed.
+        # 1) 确定性检查 —— 廉价、可复现、按角色路由。
         deterministic: List[QCFinding] = []
         deterministic += self._collector_checks(
             labelled, settings.min_sources_per_competitor, settings.min_confidence
@@ -68,7 +65,7 @@ class QCAgent(BaseAgent):
         if report is not None:
             deterministic += self._writer_checks(report)
 
-        # 2) Ask the LLM for subtler critique.
+        # 2) 请 LLM 给出更细微的批评。
         sys_prompt = QC_SYSTEM.format(
             language=self.language_name,
             min_sources=settings.min_sources_per_competitor,
@@ -101,7 +98,7 @@ class QCAgent(BaseAgent):
             summary=llm_report.summary,
             findings=deterministic + llm_report.findings,
         )
-        # If deterministic blockers/majors exist, override the decision.
+        # 若存在确定性的阻塞 / 重大问题，则覆盖该决策。
         blocker_or_major = [
             f for f in merged.findings
             if f.severity in (Severity.BLOCKER, Severity.MAJOR)
@@ -113,7 +110,7 @@ class QCAgent(BaseAgent):
         return merged
 
     # ------------------------------------------------------------------
-    # Collector-owned checks
+    # 采集器负责的检查
     # ------------------------------------------------------------------
     def _collector_checks(
         self,
@@ -179,7 +176,7 @@ class QCAgent(BaseAgent):
                     suggested_fix="Define at least one user segment with use cases and pain points.",
                 ))
 
-            # Confidence-aware orchestration: weak-evidence claims get re-collected.
+            # 置信度感知的编排：证据薄弱的断言会被重新采集。
             for path in c.low_confidence_claims(min_confidence):
                 findings.append(QCFinding(
                     target_agent=AgentRole.COLLECTOR,
@@ -189,7 +186,7 @@ class QCAgent(BaseAgent):
                     suggested_fix="Find a stronger primary source or lower the claim's specificity.",
                 ))
 
-            # Cross-source conflicts (Innovation-2): surface disagreements.
+            # 跨来源冲突（创新点 2）：暴露分歧。
             for cf in c.conflicts:
                 sev = Severity.MAJOR if cf.severity == "major" else (
                     Severity.MINOR if cf.severity == "minor" else Severity.INFO)
@@ -203,7 +200,7 @@ class QCAgent(BaseAgent):
         return findings
 
     # ------------------------------------------------------------------
-    # Analyst-owned checks
+    # 分析师负责的检查
     # ------------------------------------------------------------------
     def _analyst_checks(
         self, items: List[Tuple[str, CompetitorKnowledge]]
@@ -244,7 +241,7 @@ class QCAgent(BaseAgent):
         return findings
 
     # ------------------------------------------------------------------
-    # Writer-owned checks (report-level)
+    # 撰写器负责的检查（报告级）
     # ------------------------------------------------------------------
     def _writer_checks(self, report: FinalReport) -> List[QCFinding]:
         findings: List[QCFinding] = []
@@ -258,7 +255,7 @@ class QCAgent(BaseAgent):
                 suggested_fix="Write a tight executive summary covering all competitors.",
             ))
 
-        # Citation integrity: every [^src_xxx] in the body must resolve.
+        # 引用完整性：正文中的每个 [^src_xxx] 都必须能解析。
         known_ids = {s.id for s in report.all_sources}
         for c in report.competitors:
             known_ids.update(s.id for s in c.all_source_refs())
@@ -280,7 +277,7 @@ class QCAgent(BaseAgent):
                 suggested_fix="Only cite [^src_xxx] IDs that exist in the competitor data.",
             ))
 
-        # Coverage: every competitor should be mentioned across the narrative.
+        # 覆盖度：每个竞品都应在叙述中被提及。
         joined = " ".join(bodies)
         missing = [c.name for c in report.competitors if c.name and c.name not in joined]
         if missing and len(report.competitors) > 1:

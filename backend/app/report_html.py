@@ -1,14 +1,11 @@
-"""Standalone HTML rendering of a FinalReport.
+"""把 FinalReport 渲染为独立的 HTML。
 
-Produces a single self-contained HTML document with inline CSS / JS so the
-user can preview the analysis report in their browser or download it as a
-single ``.html`` file without any external dependencies. Includes a small
-amount of vanilla JS for tab switching, citation anchors, and section
-collapsing — these are progressive enhancements; the document remains fully
-readable with JavaScript disabled.
+产出一个内联 CSS / JS 的自包含 HTML 文档，使用户可以在浏览器中预览分析报告，
+或将其下载为单个 ``.html`` 文件，不依赖任何外部资源。包含少量原生 JS 用于
+标签切换、引用锚点和章节折叠 —— 这些都是渐进增强；即使禁用 JavaScript，
+文档依然完全可读。
 
-This module is deliberately self-contained: it depends only on the
-``FinalReport`` schema and the standard library.
+本模块刻意保持自包含：仅依赖 ``FinalReport`` schema 和标准库。
 """
 from __future__ import annotations
 
@@ -41,14 +38,13 @@ def _esc(value: object) -> str:
 
 
 def _md_to_html(md: str, source_map: dict) -> str:
-    """A very small Markdown → HTML transformer, scoped to what the report
-    writer actually produces: headers, lists, bold, italic, tables, and the
-    custom [^src_xxx] citation markers. Anything fancier is rendered as a
-    preformatted block so we never accidentally drop data."""
+    """一个极小的 Markdown → HTML 转换器，范围限定于报告撰写器实际产出的内容：
+    标题、列表、粗体、斜体、表格，以及自定义的 [^src_xxx] 引用标记。
+    任何更复杂的内容都渲染为预格式化块，因此我们绝不会意外丢数据。"""
     if not md:
         return ""
 
-    # Convert citation markers first so the inline rules below don't eat them.
+    # 先转换引用标记，以免下面的内联规则把它们吃掉。
     def _cite_sub(match: re.Match[str]) -> str:
         sid = match.group(1)
         src = source_map.get(sid)
@@ -104,7 +100,7 @@ def _md_to_html(md: str, source_map: dict) -> str:
 
     for raw in lines:
         line = raw.rstrip()
-        # Table accumulation
+        # 表格累积
         if line.lstrip().startswith("|") and line.rstrip().endswith("|"):
             _flush_list()
             in_table = True
@@ -113,7 +109,7 @@ def _md_to_html(md: str, source_map: dict) -> str:
         elif in_table:
             _flush_table()
 
-        # Headings
+        # 标题
         m = re.match(r"^(#{1,6})\s+(.*)$", line)
         if m:
             _flush_list()
@@ -121,7 +117,7 @@ def _md_to_html(md: str, source_map: dict) -> str:
             out.append(f"<h{level}>{_inline(m.group(2))}</h{level}>")
             continue
 
-        # Lists
+        # 列表
         if re.match(r"^\s*[-*]\s+", line):
             if not in_list:
                 _flush_list()
@@ -153,9 +149,9 @@ def _md_to_html(md: str, source_map: dict) -> str:
 
 
 def _inline(text: str) -> str:
-    """Inline Markdown: **bold**, *italic*, `code`, [text](href). Citations
-    were already converted to <sup> tags above, so we pass them through."""
-    # Protect existing HTML tags we already emitted (sup citations).
+    """内联 Markdown：**粗体**、*斜体*、`代码`、[文本](href)。引用在上面已被转换为
+    <sup> 标签，因此这里原样通过。"""
+    # 保护我们已生成的现有 HTML 标签（sup 引用）。
     placeholders: dict = {}
 
     def _stash(match: re.Match[str]) -> str:
@@ -367,13 +363,13 @@ def _render_comparison(comp: ComparisonMatrix, loc: dict) -> str:
     self_name = comp.self_name or ""
     self_label = loc.get("comparison.self", "Your product")
 
-    # Bar charts (function coverage / source count / pricing floor)
+    # 条形图（功能覆盖数 / 来源数 / 最低定价）
     bars_html = _render_bar_charts(comp, loc)
 
-    # Keyword cards
+    # 关键词卡片
     kw_html = _render_keyword_cards(comp, self_label)
 
-    # Three tables
+    # 三张表格
     feat = _render_comparison_table(loc.get("comparison.feature", "Feature / Capability"), comp.feature_rows, comp.competitors, self_name, self_label)
     pri = _render_comparison_table(loc.get("comparison.pricing", "Pricing tiers"), comp.pricing_rows, comp.competitors, self_name, self_label)
     usr = _render_comparison_table(loc.get("comparison.user", "User profile"), comp.user_rows, comp.competitors, self_name, self_label)
@@ -529,7 +525,7 @@ def _render_sources(report: FinalReport, loc: dict) -> str:
 
 
 def render_report_html(report: FinalReport) -> str:
-    """Build a single self-contained HTML document for the given report."""
+    """为给定报告构建一个自包含的 HTML 文档。"""
     loc = get_locale(report.locale)
     source_map = _collect_source_map(report)
     self_label = loc.get("comparison.self", "Your product")
@@ -632,7 +628,7 @@ def render_report_html(report: FinalReport) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Inline CSS / JS
+# 内联 CSS / JS
 # ---------------------------------------------------------------------------
 _STYLES = """
 :root {
@@ -746,7 +742,7 @@ li { margin: 2px 0; font-size: 13px; }
 
 _SCRIPT = """
 (function () {
-  // Tabs
+  // 标签页
   var buttons = document.querySelectorAll('.tab-btn');
   var tabs = document.querySelectorAll('.tab');
   function activate(targetId) {
@@ -762,8 +758,8 @@ _SCRIPT = """
   });
   if (buttons.length > 0) activate(buttons[0].dataset.target);
 
-  // Citation anchors — when href is an internal #source-xxx, switch to the
-  // Sources tab and scroll/flash the target row.
+  // 引用锚点 —— 当 href 是内部的 #source-xxx 时，切换到来源标签页
+  // 并滚动 / 闪烁目标行。
   document.querySelectorAll('a[data-source-id]').forEach(function (a) {
     a.addEventListener('click', function (e) {
       var href = a.getAttribute('href') || '';
@@ -777,15 +773,15 @@ _SCRIPT = """
           setTimeout(function () { el.classList.remove('highlight'); }, 1600);
         }
       }
-      // Real URLs open in a new tab via target="_blank" already.
+      // 真实 URL 已通过 target="_blank" 在新标签页打开。
     });
   });
 
-  // Print button
+  // 打印按钮
   var btn = document.getElementById('btn-print');
   if (btn) btn.addEventListener('click', function () { window.print(); });
 
-  // Expand / collapse all sections (open every tab simultaneously)
+  // 展开 / 折叠所有章节（同时打开每个标签页）
   var expanded = false;
   var allBtn = document.getElementById('btn-toggle-all');
   if (allBtn) {

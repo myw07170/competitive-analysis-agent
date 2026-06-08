@@ -1,42 +1,42 @@
-# AI Tools Used in This Project
+# 本项目使用的 AI 工具
 
-Per the challenge's compliance requirements, this document acknowledges the AI programming tools used during development and how.
+根据挑战赛的合规要求，本文档声明开发过程中使用的 AI 编程工具及其使用方式。
 
-## Tools
+## 工具
 
-* **Claude (Anthropic)** — primary collaborator. Used via Claude Code / Claude.ai for:
-  * Architecture brainstorming
-  * Schema design and review
-  * Initial agent prompt drafting
-  * Code scaffolding (Python + TypeScript)
-  * Documentation drafting
-  * Critique of prior iterations of the same files
-* **TRAE** — used as an inline coding assistant for refactors and small edits within the IDE.
+* **Claude（Anthropic）** —— 主要协作者。通过 Claude Code / Claude.ai 用于：
+  * 架构头脑风暴
+  * Schema 设计与评审
+  * 智能体 prompt 初稿撰写
+  * 代码脚手架搭建（Python + TypeScript）
+  * 文档初稿撰写
+  * 对同一文件先前迭代版本的批评
+* **TRAE** —— 作为 IDE 内的内联编码助手，用于重构和小幅编辑。
 
-## Where AI was used
+## AI 在何处被使用
 
-The boundary is roughly: AI tools drafted the scaffolding; human review shaped the schema, security/compliance posture, and the agent prompts; AI assisted with idiomatic library usage (FastAPI, LangGraph, ReactFlow).
+大致的边界是：AI 工具起草脚手架；人工评审塑造了 schema、安全 / 合规立场以及智能体 prompt；AI 协助实现了符合习惯用法的库调用（FastAPI、LangGraph、ReactFlow）。
 
-Specifically, AI was useful for:
+具体而言，AI 在以下方面发挥了作用：
 
-* Boilerplate Pydantic models and their tests.
-* The shape of the LangGraph state machine and its conditional edges.
-* React component layouts and Tailwind utility class choices.
-* Documentation prose.
-* Mock-data generation for the demo mode.
+* 样板式的 Pydantic 模型及其测试。
+* LangGraph 状态机的形态及其条件边。
+* React 组件布局与 Tailwind 工具类的选择。
+* 文档散文。
+* 演示模式的 mock 数据生成。
 
-Human judgment is responsible for:
+人工判断负责：
 
-* The three-pillar schema choice (function tree + pricing + user profile).
-* The decision to enforce the QC feedback loop via state-injected rework notes (rather than a soft "please redo" instruction).
-* The compliance posture around robots.txt, rate limiting, and PII redaction.
-* All explicit safety constraints in the system prompts.
-* All architectural decisions about extensibility (market profile abstraction, schema_version persistence).
+* 三支柱 schema 的选择（功能树 + 定价 + 用户画像）。
+* 通过注入状态的返工备注来强制 QC 反馈闭环的决策（而非一句软性的"请重做"指令）。
+* 围绕 robots.txt、限速和 PII 脱敏的合规立场。
+* 系统 prompt 中所有显式的安全约束。
+* 所有关于可扩展性的架构决策（市场画像抽象、`schema_version` 持久化）。
 
-## Verification
+## 验证
 
-All AI-suggested code was reviewed before being committed. The codebase compiles, the test suite runs, and the schema is enforced by Pydantic — none of which the AI claims credit for without the developer running them.
+所有 AI 建议的代码在提交前都经过评审。代码库可编译、测试套件可运行、schema 由 Pydantic 强制执行——这些都需要开发者亲自运行，AI 不会在未运行的情况下擅自邀功。
 
-## License
+## 许可证
 
-This file does not waive any rights; the project is MIT-licensed per `LICENSE`.
+本文件不放弃任何权利；本项目依 `LICENSE` 采用 MIT 许可证。

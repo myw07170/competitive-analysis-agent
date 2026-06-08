@@ -1,4 +1,4 @@
-"""Structured logging and trace recording."""
+"""结构化日志与追踪记录。"""
 from .logger import get_logger
 from .tracer import TraceEvent, Tracer, current_tracer, get_tracer
 

@@ -1,14 +1,11 @@
-"""Active-learning loop: turn human corrections into agent guidance.
+"""主动学习闭环：把人工修正转化为对智能体的引导。
 
-When an operator edits a generated report (``app.api.reports.patch_report``),
-the edit is stored as a :class:`Correction`. The next time the Collector or
-Writer runs for the same market, the most recent corrections are distilled into
-a short "lessons learned" block injected into the system prompt. Over time this
-should pull the ``manual_correction_rate`` down — a real feedback loop, not a
-one-off edit.
+当运营方编辑一份生成的报告（``app.api.reports.patch_report``）时，该编辑被存为一个
+:class:`Correction`。下次采集器或撰写器为同一市场运行时，最近的修正会被提炼成一段
+简短的"经验教训"块，注入系统 prompt。久而久之，这应当把 ``manual_correction_rate``
+拉低——一个真实的反馈闭环，而非一次性的编辑。
 
-The guidance is cached briefly so a burst of agent calls in one run does not
-hammer SQLite.
+引导会被短暂缓存，使一次运行中密集的智能体调用不会频繁冲击 SQLite。
 """
 from __future__ import annotations
 
@@ -40,10 +37,9 @@ def _format_hint(c: Correction) -> str:
 
 
 async def recent_guidance(market: str) -> str:
-    """Return a markdown block of lessons learned for this market (may be empty).
+    """返回该市场经验教训的 markdown 块（可能为空）。
 
-    Safe to call from any agent; failures degrade to an empty string so a
-    storage hiccup never breaks a run.
+    可从任意智能体安全调用；失败时降级为空字符串，因此存储抖动绝不会中断一次运行。
     """
     now = time.monotonic()
     cached = _CACHE.get(market)
@@ -61,7 +57,7 @@ async def recent_guidance(market: str) -> str:
                 "\n[Lessons learned from human reviewers — apply these and avoid "
                 "repeating past mistakes]:\n" + "\n".join(lines) + "\n"
             )
-    except Exception as exc:  # pragma: no cover - defensive
+    except Exception as exc:  # pragma: no cover - 防御性
         log.warning(f"recent_guidance failed for market={market!r}: {exc!r}")
         block = ""
 
@@ -70,7 +66,7 @@ async def recent_guidance(market: str) -> str:
 
 
 def invalidate_cache(market: Optional[str] = None) -> None:
-    """Drop cached guidance so a freshly-saved correction is picked up at once."""
+    """丢弃缓存的引导，使刚保存的修正能立即被拾取。"""
     if market is None:
         _CACHE.clear()
     else:

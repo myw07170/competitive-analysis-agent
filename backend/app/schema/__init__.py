@@ -1,8 +1,7 @@
-"""Pydantic schemas shared across agents.
+"""智能体间共享的 Pydantic schema。
 
-These schemas are the contract between agents. Every agent input / output
-is validated against them, which is what makes "structured message passing
-(function-calling style) instead of pure natural-language dialogue" enforceable.
+这些 schema 是智能体之间的契约。每个智能体的输入 / 输出都对照它们校验，
+正是这一点让"结构化消息传递（类函数调用风格）而非纯自然语言对话"得以强制执行。
 """
 from .competitor import (
     Cited,

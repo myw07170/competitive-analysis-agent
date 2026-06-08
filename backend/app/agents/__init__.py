@@ -1,8 +1,7 @@
-"""Agent implementations.
+"""智能体实现。
 
-All four agents share a small base class that handles LLM calls + tracing.
-Agents communicate via the orchestration ``GraphState`` — never by importing
-each other.
+四个智能体共享一个小型基类，由它处理 LLM 调用 + 追踪。
+智能体通过编排层的 ``GraphState`` 通信 —— 绝不通过相互 import。
 """
 from .analyst import AnalystAgent
 from .base import BaseAgent

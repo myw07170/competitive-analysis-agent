@@ -1,17 +1,13 @@
-"""SQLite store for reports, traces, cross-run knowledge, corrections,
-run state, and DAG checkpoints.
+"""用于报告、追踪、跨运行知识、修正、运行状态与 DAG 检查点的 SQLite 存储。
 
-Each row stores its full JSON blob — the point is auditability, replay, and
-cross-run evolution, not heavy analytics. Newer tables back the features added
-in v1.1:
+每一行都存储其完整的 JSON blob —— 目的是可审计、可回放、可跨运行演化，
+而非重度分析。较新的表支撑了 v1.1 新增的功能：
 
-* ``knowledge_snapshots`` — one row per competitor per run, keyed by a
-  normalized entity key, so the same competitor can be diffed across runs
-  (Innovation-3: knowledge-base evolution).
-* ``corrections``        — human-in-the-loop edits (Innovation-5: active learning).
-* ``runs``               — externalized run registry so status survives restart
-  and multi-worker deployments (P1-7).
-* ``run_checkpoints``    — per-node GraphState snapshots for resume (Innovation-6).
+* ``knowledge_snapshots`` —— 每次运行每个竞品一行，按归一化的实体键索引，
+  使同一竞品可在多次运行间做 diff（创新点 3：知识库演化）。
+* ``corrections``        —— 人在回路编辑（创新点 5：主动学习）。
+* ``runs``               —— 外置的运行注册表，使状态在重启与多 worker 部署后存活（P1-7）。
+* ``run_checkpoints``    —— 每节点的 GraphState 快照，用于续跑（创新点 6）。
 """
 from __future__ import annotations
 
@@ -92,11 +88,10 @@ CREATE INDEX IF NOT EXISTS idx_corr_market ON corrections(market);
 
 
 def normalize_entity_key(name: str, market: str) -> str:
-    """Stable key for the same competitor across runs.
+    """用于跨运行标识同一竞品的稳定键。
 
-    Lower-cases, strips punctuation/whitespace, and namespaces by market — a
-    lightweight entity-resolution step (no embedding model needed) that is good
-    enough to line up "Notion", "notion", "Notion " across runs.
+    转小写、去标点 / 空白，并按市场命名空间隔离 —— 一个轻量的实体消歧步骤
+    （无需嵌入模型），足以把多次运行中的 "Notion"、"notion"、"Notion " 对齐到一起。
     """
     norm = re.sub(r"\s+", "", (name or "").strip().lower())
     norm = re.sub(r"[^\w一-鿿]", "", norm)
@@ -112,7 +107,7 @@ class Store:
             await db.executescript(_SCHEMA)
             await db.commit()
 
-    # ---- Reports ----
+    # ---- 报告 ----
     async def save_report(self, report: FinalReport) -> None:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
@@ -147,7 +142,7 @@ class Store:
             ]
 
     async def get_recent_reports(self, limit: int = 200) -> List[FinalReport]:
-        """Full report objects — used by the meta-evaluator's aggregate stats."""
+        """完整的报告对象 —— 供元评估器的聚合统计使用。"""
         async with aiosqlite.connect(self.db_path) as db:
             cur = await db.execute(
                 "SELECT payload FROM reports ORDER BY generated_at DESC LIMIT ?", (limit,)
@@ -180,7 +175,7 @@ class Store:
             await db.commit()
             return True
 
-    # ---- Traces ----
+    # ---- 追踪 ----
     async def save_trace_events(self, events: List[TraceEvent]) -> None:
         async with aiosqlite.connect(self.db_path) as db:
             await db.executemany(
@@ -208,7 +203,7 @@ class Store:
             rows = await cur.fetchall()
             return [TraceEvent.model_validate_json(r[0]) for r in rows]
 
-    # ---- Knowledge snapshots (cross-run evolution) ----
+    # ---- 知识快照（跨运行演化） ----
     async def save_knowledge_snapshot(
         self, *, entity_key: str, market: str, name: str, run_id: str,
         report_id: str, captured_at: str, payload_json: str,
@@ -237,14 +232,14 @@ class Store:
         ]
 
     async def two_latest_snapshots(self, entity_key: str) -> Tuple[Optional[dict], Optional[dict]]:
-        """Return (latest, previous) snapshot dicts for diffing, or (latest, None)."""
+        """返回用于 diff 的 (最新, 上一个) 快照字典，或 (最新, None)。"""
         hist = await self.knowledge_history(entity_key, limit=2)
         latest = hist[0] if len(hist) >= 1 else None
         prev = hist[1] if len(hist) >= 2 else None
         return latest, prev
 
     async def list_entities(self, market: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Distinct tracked competitors with snapshot counts (for evolution browser)."""
+        """带快照计数的去重后受跟踪竞品（供演化浏览器使用）。"""
         q = (
             "SELECT entity_key, market, name, COUNT(*) as n, MAX(captured_at) as last "
             "FROM knowledge_snapshots {where} GROUP BY entity_key ORDER BY last DESC"
@@ -259,7 +254,7 @@ class Store:
             for r in rows
         ]
 
-    # ---- Corrections (human-in-the-loop) ----
+    # ---- 修正（人在回路） ----
     async def save_correction(self, c: Correction) -> None:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
@@ -294,7 +289,7 @@ class Store:
             row = await cur.fetchone()
         return int(row[0]) if row else 0
 
-    # ---- Run registry (externalized) ----
+    # ---- 运行注册表（外置） ----
     async def save_run(
         self, *, run_id: str, product: str, market: str, status: str,
         started_at: str, updated_at: str, report_id: Optional[str] = None,
@@ -332,7 +327,7 @@ class Store:
             "report_id": row[4], "error": row[5], "started_at": row[6], "updated_at": row[7],
         }
 
-    # ---- DAG checkpoints (resume) ----
+    # ---- DAG 检查点（续跑） ----
     async def save_checkpoint(self, *, run_id: str, node: str, seq: int,
                               state_json: str, updated_at: str) -> None:
         async with aiosqlite.connect(self.db_path) as db:

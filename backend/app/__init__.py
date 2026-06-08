@@ -1,3 +1,3 @@
-"""Competitive Analysis Agent — backend package."""
+"""竞品分析智能体 —— 后端包。"""
 
 __version__ = "1.1.0"

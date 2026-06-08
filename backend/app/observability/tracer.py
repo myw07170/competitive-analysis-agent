@@ -1,8 +1,8 @@
-"""Per-run trace recorder.
+"""每次运行的追踪记录器。
 
-Each analysis run gets its own ``Tracer`` instance. Every agent decision —
-prompt + input + output + tokens + timing — becomes a ``TraceEvent``. The
-trace is then persisted (SQLite) and surfaced to the UI for "decision replay".
+每次分析运行都获得自己的 ``Tracer`` 实例。每个智能体决策 ——
+prompt + 输入 + 输出 + token + 计时 —— 都会成为一个 ``TraceEvent``。
+随后追踪被持久化（SQLite）并呈现给 UI，用于"决策回放"。
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ class TraceEvent(BaseModel):
     prompt_system: str = ""
     prompt_user: str = ""
     response: str = ""
-    decision: str = ""          # short human label for the DAG node
+    decision: str = ""          # 给 DAG 节点的简短人类可读标签
     extras: Dict[str, Any] = Field(default_factory=dict)
     prompt_tokens: int = 0
     completion_tokens: int = 0
@@ -42,10 +42,10 @@ _CURRENT: ContextVar[Optional["Tracer"]] = ContextVar("current_tracer", default=
 
 
 class Tracer:
-    """Collects ``TraceEvent`` objects for one analysis run.
+    """为一次分析运行收集 ``TraceEvent`` 对象。
 
-    Also exposes a thread-safe async queue so the FastAPI SSE endpoint can
-    stream events to the frontend in real time.
+    同时暴露一个线程安全的异步队列，使 FastAPI 的 SSE 端点能把事件实时流式
+    推送到前端。
     """
 
     def __init__(self, run_id: Optional[str] = None) -> None:
@@ -55,7 +55,7 @@ class Tracer:
         self._listeners: List[Callable[[TraceEvent], Awaitable[None]]] = []
         self.started_at = datetime.now(timezone.utc)
 
-    # ---- Recording ----
+    # ---- 记录 ----
     @contextmanager
     def span(self, agent: str, intent: str, **extras: Any):
         ev = TraceEvent(
@@ -85,26 +85,26 @@ class Tracer:
         except asyncio.QueueFull:
             pass
 
-    # ---- Streaming ----
+    # ---- 流式推送 ----
     async def events_async(self):
-        """Async generator that yields each event as it's recorded.
+        """异步生成器，在每个事件被记录时逐个 yield。
 
-        Yields a sentinel ``None`` once the tracer is marked done so SSE
-        callers can close the stream.
+        一旦 tracer 被标记为完成，便 yield 一个哨兵值 ``None``，
+        使 SSE 调用方可以关闭流。
         """
         while True:
             ev = await self._queue.get()
-            if ev is None:  # sentinel
+            if ev is None:  # 哨兵
                 return
             yield ev
 
     def close(self) -> None:
         try:
-            self._queue.put_nowait(None)  # type: ignore[arg-type]
+            self._queue.put_nowait(None)  # type: ignore[arg-type]  # 推入哨兵以结束流
         except Exception:
             pass
 
-    # ---- Aggregates ----
+    # ---- 聚合统计 ----
     def total_tokens(self) -> int:
         return sum(e.total_tokens for e in self.events)
 
@@ -118,7 +118,7 @@ class Tracer:
         return (end - self.started_at).total_seconds()
 
 
-# ---- Context-var helpers ----
+# ---- 上下文变量辅助 ----
 @contextmanager
 def use_tracer(tracer: Tracer):
     token = _CURRENT.set(tracer)
@@ -133,7 +133,7 @@ def current_tracer() -> Optional[Tracer]:
 
 
 def get_tracer() -> Tracer:
-    """Get the tracer bound to the current async context, or raise."""
+    """获取绑定到当前异步上下文的 tracer，否则抛出异常。"""
     t = current_tracer()
     if t is None:
         raise RuntimeError("No tracer bound — wrap your call in `with use_tracer(...)`.")

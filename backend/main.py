@@ -1,8 +1,8 @@
-"""FastAPI entrypoint.
+"""FastAPI 入口。
 
-Usage:
-    python main.py                  # uses .env settings
-    uvicorn main:app --reload       # dev mode
+用法：
+    python main.py                  # 使用 .env 配置
+    uvicorn main:app --reload       # 开发模式
 """
 from __future__ import annotations
 

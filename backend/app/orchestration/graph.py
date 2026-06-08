@@ -1,27 +1,26 @@
-"""LangGraph DAG for the competitive-analysis pipeline.
+"""竞品分析流水线的 LangGraph DAG。
 
-State machine
-=============
+状态机
+======
 
     [identify] → [collect] → [analyze] → [write] → [qc]
                     ▲            ▲          ▲        │
-                    └────────────┴──────────┴── rework (routed to the agent
-                                                 that actually owns the defect)
+                    └────────────┴──────────┴── 返工（路由到真正
+                                                 对缺陷负责的智能体）
                                                           │
-                                                          └─── approve → END
+                                                          └─── 通过 → END
 
-What makes the loop *real* (not pseudo):
+是什么让这个循环是*真实的*（而非伪装的）：
 
-* QC reviews the collected knowledge AND the final report, and produces
-  role-routed findings (collector / analyst / writer).
-* ``_route_after_qc`` sends the run back to the **earliest stage that owns a
-  blocking/major finding** — so an analyst defect re-runs from ``analyze``, a
-  writer defect from ``write``, not blindly from ``collect``.
-* Rework is **targeted**: only the flagged competitors are re-collected, and
-  each agent receives the slice of findings addressed to it, carried as a typed
-  :class:`AgentMessage` (recorded in the trace), not a blob of natural language.
-* Collection/analysis run **concurrently** (bounded by a semaphore).
-* Every node checkpoints the state so a failed run can be resumed.
+* QC 同时审查采集到的知识与最终报告，并产出按角色路由的结论
+  （采集器 / 分析师 / 撰写器）。
+* ``_route_after_qc`` 把运行退回到**拥有阻塞 / 重大问题的最早阶段** ——
+  因此分析师的缺陷从 ``analyze`` 重跑，撰写器的缺陷从 ``write`` 重跑，
+  而非盲目地从 ``collect`` 重跑。
+* 返工是**定向的**：只重新采集被标记的竞品，且每个智能体只收到发给它的那部分
+  结论，以带类型的 :class:`AgentMessage` 承载（记入追踪），而非一团自然语言。
+* 采集 / 分析**并发**执行（受信号量约束）。
+* 每个节点都对状态打检查点，使失败的运行可以续跑。
 """
 from __future__ import annotations
 
@@ -51,8 +50,8 @@ from .state import AnalysisRequest
 
 log = get_logger("orchestration")
 
-# Linear stage order (excludes the terminal "done"). Used for resume-skip and
-# for choosing the earliest stage to re-enter on rework.
+# 线性阶段顺序（不含终态 "done"）。用于续跑跳过，
+# 以及在返工时选择重新进入的最早阶段。
 STAGE_ORDER = ["identify", "collect", "analyze", "write", "qc"]
 _AGENT_TO_STAGE = {
     AgentRole.COLLECTOR.value: "collect",
@@ -62,7 +61,7 @@ _AGENT_TO_STAGE = {
 
 
 # ---------------------------------------------------------------------------
-# State
+# 状态
 # ---------------------------------------------------------------------------
 class GraphState(TypedDict, total=False):
     request: Dict[str, Any]
@@ -82,7 +81,7 @@ class GraphState(TypedDict, total=False):
 
 
 # ---------------------------------------------------------------------------
-# Rework-note helpers (structured → per-agent / per-competitor slices)
+# 返工备注辅助函数（结构化 → 按智能体 / 按竞品切片）
 # ---------------------------------------------------------------------------
 def _findings(last_qc: Dict[str, Any]) -> List[Dict[str, Any]]:
     return (last_qc or {}).get("findings", []) or []
@@ -99,7 +98,7 @@ def _format_findings(findings: List[Dict[str, Any]]) -> Optional[str]:
 
 
 def _collector_notes_for(last_qc: Dict[str, Any], label: str) -> Optional[str]:
-    """Notes for one competitor label ('competitors[2]' or 'target_product')."""
+    """针对某个竞品标签（'competitors[2]' 或 'target_product'）的备注。"""
     out = [
         f for f in _findings(last_qc)
         if f.get("target_agent") == AgentRole.COLLECTOR.value
@@ -115,7 +114,7 @@ def _role_notes(last_qc: Dict[str, Any], role: AgentRole) -> Optional[str]:
 
 
 def _flagged_collector_labels(last_qc: Dict[str, Any]) -> set:
-    """Labels ('competitors[i]' / 'target_product') with collector findings."""
+    """带有采集器结论的标签（'competitors[i]' / 'target_product'）。"""
     labels: set = set()
     for f in _findings(last_qc):
         if f.get("target_agent") != AgentRole.COLLECTOR.value:
@@ -129,7 +128,7 @@ def _flagged_collector_labels(last_qc: Dict[str, Any]) -> set:
 
 
 # ---------------------------------------------------------------------------
-# Node implementations
+# 节点实现
 # ---------------------------------------------------------------------------
 def _make_nodes(market: MarketProfile):
     collector = CollectorAgent(market)
@@ -140,7 +139,7 @@ def _make_nodes(market: MarketProfile):
     concurrency = settings.collector_concurrency
 
     async def _bounded_gather(factories: List[Callable[[], Awaitable[Any]]]) -> List[Any]:
-        """Run coroutine factories concurrently, bounded by the configured limit."""
+        """并发运行协程工厂，受配置的上限约束。"""
         sem = asyncio.Semaphore(concurrency)
 
         async def _run(make: Callable[[], Awaitable[Any]]) -> Any:
@@ -169,11 +168,11 @@ def _make_nodes(market: MarketProfile):
         names = list(state.get("competitor_names", []))
         prev_names = list(state.get("qc_competitor_names", [])) or names
 
-        # Targeted rework: on iterations > 0 only re-collect the competitors
-        # QC actually flagged; everything else is carried over untouched.
+        # 定向返工：在迭代 > 0 时只重新采集 QC 实际标记的竞品；
+        # 其余一律原样沿用。
         flagged = _flagged_collector_labels(last_qc) if iteration > 0 else None
 
-        # --- self / target product ---
+        # --- 自身 / 目标产品 ---
         target_product = state.get("target_product")
         self_flagged = (flagged is None) or ("target_product" in flagged)
         if target_product is None or (iteration > 0 and self_flagged):
@@ -186,12 +185,12 @@ def _make_nodes(market: MarketProfile):
             except Exception as exc:
                 log.warning(f"collector failed for self={product!r} (it={iteration}): {exc!r}")
 
-        # --- competitors (concurrent) ---
+        # --- 竞品（并发） ---
         def _needs(i: int, name: str) -> bool:
             if flagged is None:
                 return True
             label = f"competitors[{i}]"
-            # Map current index back to the label QC used (prev order).
+            # 把当前索引映射回 QC 使用的标签（上一轮的顺序）。
             try:
                 prev_idx = prev_names.index(name)
                 label = f"competitors[{prev_idx}]"
@@ -309,8 +308,8 @@ def _make_nodes(market: MarketProfile):
             report=report, target_product=target_product,
         )
 
-        # Emit structured, typed rework requests (the inter-agent protocol) and
-        # record each as a trace event so the handoff is observable.
+        # 发出结构化、带类型的返工请求（智能体间协议），
+        # 并各记一条追踪事件，使交接可观测。
         messages = list(state.get("messages", []))
         if qc_report.needs_rework:
             messages += _emit_rework_messages(qc_report)
@@ -330,7 +329,7 @@ def _make_nodes(market: MarketProfile):
 
 
 def _emit_rework_messages(qc_report) -> List[Dict[str, Any]]:
-    """Build one typed AgentMessage per receiving agent and trace it."""
+    """为每个接收智能体构建一条带类型的 AgentMessage 并记入追踪。"""
     by_agent: Dict[str, List[Dict[str, Any]]] = {}
     for f in qc_report.findings:
         if f.severity.value in ("blocker", "major"):
@@ -359,7 +358,7 @@ def _emit_rework_messages(qc_report) -> List[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# Conditional routing (role-targeted)
+# 条件路由（按角色定向）
 # ---------------------------------------------------------------------------
 def _route_after_qc(state: GraphState) -> str:
     last = state.get("last_qc") or {}
@@ -369,7 +368,7 @@ def _route_after_qc(state: GraphState) -> str:
         log.info(f"QC decision={decision} — finishing")
         return "done"
 
-    # Re-enter at the earliest stage that owns a blocking/major finding.
+    # 从拥有阻塞 / 重大问题的最早阶段重新进入。
     severe_stages = {
         _AGENT_TO_STAGE.get(f.get("target_agent"))
         for f in _findings(last)
@@ -384,13 +383,13 @@ def _route_after_qc(state: GraphState) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Checkpointing wrapper (resume support)
+# 检查点包装器（续跑支持）
 # ---------------------------------------------------------------------------
 def _wrap_checkpointed(name: str, fn, seq: Dict[str, int]):
     async def _node(state: GraphState) -> GraphState:
         resume_from = state.get("resume_from")
         if resume_from and STAGE_ORDER.index(name) < STAGE_ORDER.index(resume_from):
-            return state  # already completed in the interrupted run — skip
+            return state  # 在被中断的运行中已完成 —— 跳过
         new_state = await fn(state)
         if resume_from:
             new_state = {**new_state, "resume_from": None}
@@ -412,12 +411,12 @@ async def _save_checkpoint(node: str, state: GraphState, seq: Dict[str, int]) ->
             state_json=json.dumps(state, default=str, ensure_ascii=False),
             updated_at=datetime.now(timezone.utc).isoformat(),
         )
-    except Exception as exc:  # pragma: no cover - checkpoint must never break a run
+    except Exception as exc:  # pragma: no cover - 检查点绝不能中断一次运行
         log.warning(f"checkpoint save failed (node={node}): {exc!r}")
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# 公共 API
 # ---------------------------------------------------------------------------
 def build_graph(market: MarketProfile):
     n_identify, n_collect, n_analyze, n_write, n_qc = _make_nodes(market)
@@ -443,7 +442,7 @@ def build_graph(market: MarketProfile):
 
 
 async def run_analysis(req: AnalysisRequest, tracer: Tracer) -> FinalReport:
-    """Run the full DAG and return the persisted final report."""
+    """运行完整 DAG 并返回已持久化的最终报告。"""
     market = get_market(req.market)
     graph = build_graph(market)
     initial: GraphState = {
@@ -464,11 +463,10 @@ async def run_analysis(req: AnalysisRequest, tracer: Tracer) -> FinalReport:
 
 
 async def resume_analysis(run_id: str, tracer: Tracer) -> FinalReport:
-    """Resume a previously-interrupted run from its last checkpoint.
+    """从最近的检查点恢复一次此前被中断的运行。
 
-    Reloads the saved GraphState, marks the stage *after* the last completed
-    node as the resume point, and continues the DAG. Stages before that point
-    are skipped (their outputs are already in the restored state).
+    重新加载已保存的 GraphState，把最后一个完成节点*之后*的阶段标记为恢复点，
+    然后继续 DAG。该点之前的阶段会被跳过（它们的输出已在恢复的状态中）。
     """
     store = get_store()
     await store.init()
@@ -478,7 +476,7 @@ async def resume_analysis(run_id: str, tracer: Tracer) -> FinalReport:
 
     state: GraphState = ckpt["state"]
     last_node = ckpt["node"]
-    # Resume at the node following the last completed one (or re-run qc itself).
+    # 从最后一个完成节点的下一个节点恢复（或重跑 qc 本身）。
     idx = STAGE_ORDER.index(last_node)
     resume_from = STAGE_ORDER[min(idx + 1, len(STAGE_ORDER) - 1)]
     state["resume_from"] = resume_from
@@ -534,7 +532,7 @@ async def _finalize(final_state: GraphState, tracer: Tracer, market: MarketProfi
 
 
 async def _save_knowledge_snapshots(report: FinalReport, store) -> None:
-    """Persist one snapshot per competitor for cross-run evolution/diff."""
+    """为跨运行演化 / diff，给每个竞品持久化一个快照。"""
     captured_at = report.generated_at.isoformat()
     items: List[CompetitorKnowledge] = list(report.competitors)
     if report.target_product is not None:
@@ -547,12 +545,12 @@ async def _save_knowledge_snapshots(report: FinalReport, store) -> None:
                 report_id=report.id, captured_at=captured_at,
                 payload_json=c.model_dump_json(),
             )
-        except Exception as exc:  # pragma: no cover - snapshots are best-effort
+        except Exception as exc:  # pragma: no cover - 快照尽力而为
             log.warning(f"knowledge snapshot failed for {c.name!r}: {exc!r}")
 
 
 def _schema_completeness(competitors: List[CompetitorKnowledge]) -> float:
-    """Fraction of the key fields populated across all competitors."""
+    """所有竞品中关键字段已填充的比例。"""
     if not competitors:
         return 0.0
     expected_per = [

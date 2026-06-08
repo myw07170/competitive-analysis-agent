@@ -1,14 +1,12 @@
-"""Agent self-evaluation & dynamic schema evolution (Innovation-4).
+"""智能体自评与动态 schema 演进（创新点 4）。
 
-The :class:`MetaEvaluator` looks across *all* historical reports — not a single
-run — and asks: which schema fields are consistently empty? which fields do
-humans keep correcting? where do sources keep disagreeing? From those aggregate
-signals it emits :class:`SchemaSuggestion` records proposing concrete changes
-(deprecate a dead field, tighten a prompt, split an overloaded field).
+:class:`MetaEvaluator` 横跨*所有*历史报告——而非单次运行——并发问：哪些 schema 字段
+始终为空？哪些字段被人类反复修正？来源在哪里反复分歧？从这些聚合信号中，它产出
+:class:`SchemaSuggestion` 记录，提出具体的变更建议（弃用一个无用字段、收紧一个 prompt、
+拆分一个承载过多的字段）。
 
-It does not mutate the schema automatically — the suggestions are surfaced in
-the UI for a human to accept — but ``schema_version`` is already persisted with
-every report, so accepted changes can roll forward without invalidating history.
+它不会自动修改 schema——这些建议会在 UI 中呈现供人类采纳——但 ``schema_version`` 已随
+每份报告持久化，因此被采纳的变更可以向前滚动而不使历史失效。
 """
 from __future__ import annotations
 
@@ -19,7 +17,7 @@ from .schema.competitor import CompetitorKnowledge
 from .schema.report import SchemaSuggestion
 from .storage import get_store
 
-# Field -> predicate "is this field populated for this competitor?"
+# 字段 -> 谓词"该竞品的这个字段是否已填充？"
 _FIELDS: Dict[str, Callable[[CompetitorKnowledge], bool]] = {
     "homepage": lambda c: bool(c.homepage),
     "short_description": lambda c: bool(c.short_description),
@@ -33,9 +31,9 @@ _FIELDS: Dict[str, Callable[[CompetitorKnowledge], bool]] = {
     "swot": lambda c: c.swot is not None,
 }
 
-_LOW = 0.2     # below this completeness → candidate for deprecate/make_optional
-_DEAD = 0.05   # essentially never populated → deprecate
-_CORRECTION_HOT = 3   # a path corrected at least this many times → tighten prompt
+_LOW = 0.2     # 完整度低于此值 → 弃用 / 改为可选的候选项
+_DEAD = 0.05   # 基本从不填充 → 弃用
+_CORRECTION_HOT = 3   # 一个路径被修正至少这么多次 → 收紧 prompt
 
 
 class MetaEvaluator:
@@ -58,13 +56,13 @@ class MetaEvaluator:
                 hits = sum(1 for c in competitors if pred(c))
                 completeness[field] = round(hits / n, 3)
 
-        # Correction hot-spots: normalize the indexed path (drop array indices).
+        # 修正热点：归一化带索引的路径（去掉数组下标）。
         def _norm(path: str) -> str:
             import re
             return re.sub(r"\[[^\]]*\]", "[]", path or "")
 
         corr_counter: Counter = Counter(_norm(c.target_path) for c in corrections)
-        # Conflict hot-spots across all competitors.
+        # 横跨所有竞品的冲突热点。
         conflict_counter: Counter = Counter()
         for c in competitors:
             for cf in c.conflicts:
@@ -72,10 +70,10 @@ class MetaEvaluator:
 
         suggestions: List[SchemaSuggestion] = []
 
-        # 1) Dead / sparse fields → deprecate or make optional.
+        # 1) 无用 / 稀疏字段 → 弃用或改为可选。
         for field, frac in completeness.items():
             if n < 3:
-                continue  # not enough data to judge
+                continue  # 数据不足以判断
             if frac <= _DEAD:
                 suggestions.append(SchemaSuggestion(
                     field=field, action="deprecate",
@@ -89,7 +87,7 @@ class MetaEvaluator:
                     evidence={"completeness": frac, "n": n}, confidence=0.55,
                 ))
 
-        # 2) Frequently-corrected paths → tighten the producing prompt.
+        # 2) 频繁被修正的路径 → 收紧产出它的 prompt。
         for path, count in corr_counter.most_common(8):
             if count >= _CORRECTION_HOT:
                 suggestions.append(SchemaSuggestion(
@@ -98,7 +96,7 @@ class MetaEvaluator:
                     evidence={"corrections": float(count)}, confidence=0.6,
                 ))
 
-        # 3) Frequent source conflicts → add an explicit reconciliation field / prompt.
+        # 3) 频繁的来源冲突 → 增加一个显式的协调字段 / prompt。
         for path, count in conflict_counter.most_common(5):
             if count >= 2:
                 suggestions.append(SchemaSuggestion(

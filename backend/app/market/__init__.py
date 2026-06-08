@@ -1,14 +1,13 @@
-"""Market profile registry — the extension point for new geographies.
+"""市场画像注册表 —— 新增地区的扩展点。
 
-To add a new market (e.g. ``jp``):
+新增一个市场（例如 ``jp``）：
 
-1. Create ``app/market/jp.py`` subclassing :class:`MarketProfile`.
-2. Register it in ``REGISTRY`` below.
-3. Add a locale bundle in ``app/i18n/locales.py``.
-4. Add a frontend i18n bundle in ``frontend/src/i18n/jp.ts``.
+1. 创建 ``app/market/jp.py``，继承 :class:`MarketProfile`。
+2. 在下方的 ``REGISTRY`` 中注册它。
+3. 在 ``app/i18n/locales.py`` 中添加一份语言包。
+4. 在 ``frontend/src/i18n/jp.ts`` 中添加一份前端 i18n 语言包。
 
-Everything else — agents, schema, orchestrator, UI — reads from the active
-profile and adapts automatically.
+其余一切 —— 智能体、schema、编排器、UI —— 都从当前激活的画像读取并自动适配。
 """
 from __future__ import annotations
 

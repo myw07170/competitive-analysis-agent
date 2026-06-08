@@ -1,4 +1,4 @@
-"""Loguru-based structured logger. One configured sink for the whole app."""
+"""基于 Loguru 的结构化日志器。全应用共用一个已配置的 sink。"""
 from __future__ import annotations
 
 import os

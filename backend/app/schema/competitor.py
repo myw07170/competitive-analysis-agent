@@ -1,13 +1,13 @@
-"""Competitor knowledge schema.
+"""竞品知识 schema。
 
-This is the canonical structure every agent must conform to. Defined once,
-enforced everywhere via Pydantic. Three pillars:
+这是每个智能体都必须遵循的标准结构。定义一次，处处通过 Pydantic 强制执行。
+三大支柱：
 
-1. ``FunctionTree``  — hierarchical capability map.
-2. ``PricingModel``  — tiered pricing + add-ons.
-3. ``UserProfile``   — segment-level audience description.
+1. ``FunctionTree``  —— 层级化的能力图谱。
+2. ``PricingModel``  —— 分档定价 + 附加项。
+3. ``UserProfile``   —— 细分层面的受众描述。
 
-Every leaf fact carries a ``SourceRef`` so the report is fully traceable.
+每个叶子事实都携带一个 ``SourceRef``，因此报告完全可溯源。
 """
 from __future__ import annotations
 
@@ -20,12 +20,11 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 
 # ---------------------------------------------------------------------------
-# Tolerant coercion helpers
+# 宽容的类型强制转换辅助函数
 #
-# Some LLMs (especially Chinese-trained models) return a single descriptive
-# string where the schema expects a list, or non-numeric prose where it
-# expects a number. Rather than fail the whole run on cosmetic shape drift,
-# we coerce here — and keep the original prose in a sensible place.
+# 某些 LLM（尤其是中文训练的模型）会在 schema 期望列表处返回单个描述性字符串，
+# 或在期望数字处返回非数字的文字。与其因表层的形态漂移而让整次运行失败，
+# 不如在这里做强制转换——并把原始文字保留在合理的位置。
 # ---------------------------------------------------------------------------
 _LIST_SPLIT_RE = re.compile(r"[、,;,；\n]| {2,}|/| - ")
 
@@ -52,21 +51,21 @@ def _coerce_dict(v: Any) -> Any:
 
 
 def _coerce_optional_float(v: Any) -> Any:
-    """Return float for numeric inputs, None for anything else (e.g. '按需', 'custom')."""
+    """数值输入返回 float，其他一律返回 None（例如 '按需'、'custom'）。"""
     if v is None or isinstance(v, (int, float)):
         return v
     if isinstance(v, str):
-        # Pull the first number out of the string, otherwise None.
+        # 从字符串中取出第一个数字，否则返回 None。
         m = re.search(r"-?\d+(?:\.\d+)?", v)
         return float(m.group(0)) if m else None
     return v
 
 
 def _coerce_optional_str(v: Any) -> Any:
-    """Stringify scalars; preserve None; pass through real strings.
+    """把标量转为字符串；保留 None；真正的字符串原样通过。
 
-    LLMs sometimes return a freeform 'string' field as a number (4.7) or bool
-    (True). Convert to str so Pydantic doesn't reject the whole record.
+    LLM 有时会把一个自由格式的 'string' 字段返回为数字（4.7）或布尔值（True）。
+    转为 str，使 Pydantic 不至于拒绝整条记录。
     """
     if v is None:
         return None
@@ -78,12 +77,12 @@ def _coerce_optional_str(v: Any) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# Source traceability
+# 来源可溯源性
 # ---------------------------------------------------------------------------
 class SourceRef(BaseModel):
-    """A traceable pointer to the origin of a fact.
+    """指向某条事实出处的可溯源指针。
 
-    The frontend renders these as clickable badges next to every claim.
+    前端会把它们渲染为每条断言旁可点击的徽标。
     """
 
     id: str = Field(default_factory=lambda: f"src_{uuid4().hex[:10]}")
@@ -107,14 +106,14 @@ class SourceRef(BaseModel):
         if v is None or v == "":
             return "llm_prior"
         if v not in allowed:
-            # Fall back instead of crashing on free-text kinds the model invents.
+            # 对于模型臆造的自由文本 kind，回退而非崩溃。
             return "llm_prior"
         return v
 
     @field_validator("confidence", mode="before")
     @classmethod
     def _coerce_confidence(cls, v):
-        """Models sometimes return strings ('high', '0.85'); coerce to float."""
+        """模型有时返回字符串（'high'、'0.85'）；强制转为 float。"""
         if isinstance(v, (int, float)):
             return float(v)
         if isinstance(v, str):
@@ -130,25 +129,24 @@ class SourceRef(BaseModel):
     @field_validator("url", mode="before")
     @classmethod
     def _coerce_url(cls, v):
-        """Empty strings should become None — pydantic optional handling."""
+        """空字符串应变为 None —— 配合 pydantic 的可选字段处理。"""
         if isinstance(v, str) and not v.strip():
             return None
         return v
 
 
 class Cited(BaseModel):
-    """A value bound to its supporting source(s). Used as the leaf of every
-    structured field, so the writer can render inline citations."""
+    """绑定到其支撑来源的一个值。用作每个结构化字段的叶子，
+    使撰写器能渲染内联引用。"""
 
     value: str
     sources: List[SourceRef] = Field(default_factory=list)
 
     def confidence(self) -> Optional[float]:
-        """Aggregate confidence for this claim = max confidence across its sources.
+        """该断言的聚合置信度 = 其各来源置信度的最大值。
 
-        A claim is only as strong as its single best-supporting source. Returns
-        ``None`` when the claim carries no source at all (so callers can treat
-        "unsourced" distinctly from "low confidence").
+        一条断言的强度取决于它唯一最强的支撑来源。当断言完全没有来源时返回
+        ``None``（这样调用方可以把"无来源"与"低置信度"区别对待）。
         """
         if not self.sources:
             return None
@@ -156,11 +154,10 @@ class Cited(BaseModel):
 
 
 class ConflictFlag(BaseModel):
-    """A detected disagreement between sources (or internal inconsistency).
+    """检测到的来源间分歧（或内部不一致）。
 
-    Surfaced in the UI as a "⚠ 来源分歧 / source conflict" badge so a reviewer
-    can see *where* the evidence disagrees rather than trusting a silently
-    picked value. Produced deterministically by ``app.consistency``.
+    在 UI 中呈现为"⚠ 来源分歧 / source conflict"徽标，使审阅者能看到证据在*哪里*
+    分歧，而非信任一个被默默选中的值。由 ``app.consistency`` 确定性地产出。
     """
 
     field: str = Field(description="Dotted path of the field in conflict, e.g. 'pricing.tiers[Pro].monthly_price'")
@@ -173,7 +170,7 @@ class ConflictFlag(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Pillar 1: Function tree
+# 支柱 1：功能树
 # ---------------------------------------------------------------------------
 class FunctionNode(BaseModel):
     name: str
@@ -189,7 +186,7 @@ class FunctionNode(BaseModel):
     @field_validator("children", mode="before")
     @classmethod
     def _coerce_children(cls, v):
-        """Accept a plain string, a list of strings, or a list of dicts."""
+        """接受纯字符串、字符串列表或字典列表。"""
         if v is None:
             return []
         if isinstance(v, str):
@@ -221,7 +218,7 @@ class FunctionTree(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Pillar 2: Pricing model
+# 支柱 2：定价模型
 # ---------------------------------------------------------------------------
 class PricingTier(BaseModel):
     name: str
@@ -260,7 +257,7 @@ class PricingModel(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Pillar 3: User profile
+# 支柱 3：用户画像
 # ---------------------------------------------------------------------------
 class UserSegment(BaseModel):
     name: str
@@ -287,7 +284,7 @@ class UserSegment(BaseModel):
     @field_validator("representative_quotes", mode="before")
     @classmethod
     def _coerce_quotes(cls, v):
-        """Accept a plain string, a list of strings, or a list of dicts."""
+        """接受纯字符串、字符串列表或字典列表。"""
         if v is None:
             return []
         if isinstance(v, str):
@@ -320,7 +317,7 @@ class UserProfile(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# SWOT (derived during analysis)
+# SWOT（在分析阶段派生）
 # ---------------------------------------------------------------------------
 class SWOTAnalysis(BaseModel):
     strengths: List[Cited] = Field(default_factory=list)
@@ -350,10 +347,10 @@ class SWOTAnalysis(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Top-level competitor record
+# 顶层竞品记录
 # ---------------------------------------------------------------------------
 class CompetitorKnowledge(BaseModel):
-    """The schema all competitor data must conform to."""
+    """所有竞品数据都必须遵循的 schema。"""
 
     name: str
     aliases: List[str] = Field(default_factory=list)
@@ -395,7 +392,7 @@ class CompetitorKnowledge(BaseModel):
     schema_version: str = "1.1.0"
 
     def source_count(self) -> int:
-        """How many unique sources back this competitor's data."""
+        """有多少个去重后的来源支撑该竞品的数据。"""
         seen: set[str] = set()
 
         def _add(refs: List[SourceRef]) -> None:
@@ -421,7 +418,7 @@ class CompetitorKnowledge(BaseModel):
         return len(seen)
 
     def all_source_refs(self) -> List[SourceRef]:
-        """Flatten every SourceRef attached anywhere on this competitor."""
+        """扁平化该竞品上任意位置挂载的每一个 SourceRef。"""
         out: List[SourceRef] = []
         out.extend(self.sources)
         out.extend(self.pricing.sources)
@@ -448,10 +445,9 @@ class CompetitorKnowledge(BaseModel):
         return out
 
     def avg_confidence(self) -> float:
-        """Mean confidence across every source backing this competitor.
+        """支撑该竞品的每个来源置信度的均值。
 
-        Drives the "confidence-aware" orchestration: a competitor whose evidence
-        is, on average, weak becomes a candidate for targeted re-collection.
+        驱动"置信度感知"的编排：证据平均偏弱的竞品会成为定向重新采集的候选项。
         """
         refs = self.all_source_refs()
         if not refs:
@@ -459,9 +455,9 @@ class CompetitorKnowledge(BaseModel):
         return round(sum(r.confidence for r in refs) / len(refs), 3)
 
     def low_confidence_claims(self, threshold: float) -> List[str]:
-        """Dotted paths of structured claims whose best source is below ``threshold``.
+        """其最佳来源低于 ``threshold`` 的结构化断言的点分路径。
 
-        Used by QC to raise targeted, confidence-driven rework findings.
+        供 QC 用于提出定向的、由置信度驱动的返工结论。
         """
         weak: List[str] = []
 
