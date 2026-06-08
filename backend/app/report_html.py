@@ -201,8 +201,12 @@ def _render_metrics(report: FinalReport, loc: dict) -> str:
         (loc.get("metrics.llm_calls", "LLM calls"), f"{m.total_llm_calls}"),
         (loc.get("metrics.completeness", "Schema completeness"), f"{m.schema_completeness * 100:.0f}%"),
         (loc.get("metrics.avg_sources", "Avg sources / competitor"), f"{m.avg_sources_per_competitor}"),
+        (loc.get("metrics.confidence", "Avg confidence"), f"{m.avg_confidence * 100:.0f}%"),
+        (loc.get("metrics.conflicts", "Source conflicts"), f"{m.conflict_count}"),
         (loc.get("metrics.iterations", "QC iterations"), f"{m.qc_iterations}"),
         (loc.get("metrics.rework", "Rework count"), f"{m.rework_count}"),
+        (loc.get("metrics.manual_correction", "Manual-correction rate"),
+         f"{m.manual_correction_rate * 100:.0f}%"),
     ]
     parts = [
         f'<div class="metric"><div class="metric-label">{_esc(k)}</div>'
@@ -255,6 +259,7 @@ def _render_competitor_card(c: CompetitorKnowledge, *, is_self: bool, self_label
     pricing_html = _render_pricing(c)
     user_html = _render_user(c)
     swot_html = _render_swot(c)
+    conflicts_html = _render_conflicts(c)
 
     classes = "card competitor-card" + (" card-self" if is_self else "")
     return f"""
@@ -265,6 +270,7 @@ def _render_competitor_card(c: CompetitorKnowledge, *, is_self: bool, self_label
       </div>
       <p class="muted">{_esc(c.short_description or "")}</p>
       {f'<p class="muted small"><strong>Market position:</strong> {_esc(c.market_position)}</p>' if c.market_position else ''}
+      {conflicts_html}
       <div class="grid-3">
         {fn_html}
         {pricing_html}
@@ -273,6 +279,19 @@ def _render_competitor_card(c: CompetitorKnowledge, *, is_self: bool, self_label
       {swot_html}
     </div>
     """
+
+
+def _render_conflicts(c: CompetitorKnowledge) -> str:
+    if not c.conflicts:
+        return ""
+    rows = []
+    for cf in c.conflicts:
+        vals = f" — {_esc(' ≠ '.join(cf.values))}" if cf.values else ""
+        rows.append(
+            f'<div class="conflict">⚠ <span class="mono">{_esc(cf.field)}</span> '
+            f'<span class="muted small">{_esc(cf.detail)}{vals}</span></div>'
+        )
+    return f'<div class="conflicts">{"".join(rows)}</div>'
 
 
 def _render_function_tree(c: CompetitorKnowledge) -> str:
@@ -647,7 +666,8 @@ a:hover { text-decoration: underline; }
 .tab-bar { display: flex; gap: 4px; padding: 0 32px; background: var(--card); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
 .tab-btn { padding: 12px 16px; border: none; background: transparent; color: var(--muted); font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent; }
 .tab-btn.active { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600; }
-.metrics-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; padding: 12px 32px; background: var(--card); border-bottom: 1px solid var(--border); }
+.metrics-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 8px; padding: 12px 32px; background: var(--card); border-bottom: 1px solid var(--border); }
+@media (max-width: 1280px) { .metrics-grid { grid-template-columns: repeat(5, 1fr); } }
 @media (max-width: 900px) { .metrics-grid { grid-template-columns: repeat(2, 1fr); } }
 .metric { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: white; }
 .metric-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
@@ -712,6 +732,9 @@ li { margin: 2px 0; font-size: 13px; }
 .src-kind { font-size: 11px; color: var(--muted); }
 .report-footer { text-align: center; padding: 20px; color: var(--muted); font-size: 12px; }
 .sub-h { font-size: 14px; color: #334155; margin: 14px 0 6px; }
+.conflicts { margin: 8px 0; display: flex; flex-direction: column; gap: 4px; }
+.conflict { font-size: 12px; padding: 4px 8px; border-radius: 6px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 @media print {
   body { background: white; }

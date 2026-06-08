@@ -11,6 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.api import analysis as analysis_api
+from app.api import knowledge as knowledge_api
+from app.api import meta as meta_api
 from app.api import reports as reports_api
 from app.api import traces as traces_api
 from app.config import get_settings
@@ -39,6 +41,8 @@ def create_app() -> FastAPI:
     app.include_router(analysis_api.router)
     app.include_router(reports_api.router)
     app.include_router(traces_api.router)
+    app.include_router(knowledge_api.router)
+    app.include_router(meta_api.router)
 
     @app.on_event("startup")
     async def _startup() -> None:

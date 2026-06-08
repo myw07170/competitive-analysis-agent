@@ -28,27 +28,34 @@ competitive-analysis-agent/
 │   │
 │   ├── app/
 │   │   ├── config.py               # Pydantic Settings (env-driven)
+│   │   ├── consistency.py          # Conflict detection + self-consistency voting
+│   │   ├── knowledge.py            # Cross-run competitor diff
+│   │   ├── meta.py                 # Agent self-evaluation → schema suggestions
+│   │   ├── learning.py             # Corrections → active-learning prompt guidance
+│   │   ├── report_html.py          # Standalone self-contained HTML export
 │   │   │
 │   │   ├── api/
-│   │   │   ├── analysis.py         # /api/analysis/{start,stream,dag,markets,status}
-│   │   │   ├── reports.py          # /api/reports/{...}
-│   │   │   └── traces.py           # /api/traces/{run_id}
+│   │   │   ├── analysis.py         # /api/analysis/{start,stream,dag,markets,status,resume}
+│   │   │   ├── reports.py          # /api/reports/{...} incl. PATCH (human edit)
+│   │   │   ├── traces.py           # /api/traces/{run_id}
+│   │   │   ├── knowledge.py        # /api/knowledge/{entities,history,diff}
+│   │   │   └── meta.py             # /api/meta/{suggestions,corrections}
 │   │   │
 │   │   ├── agents/
-│   │   │   ├── base.py             # LLM call + JSON parse + tracing
-│   │   │   ├── collector.py        # Identify + gather (with web evidence)
-│   │   │   ├── analyst.py          # SWOT analysis
-│   │   │   ├── writer.py           # Final report synthesis
-│   │   │   └── qc.py               # Deterministic + LLM critique → rework decision
+│   │   │   ├── base.py             # LLM call + JSON parse/repair + tracing
+│   │   │   ├── collector.py        # Identify (+self-consistency) + gather (web evidence + guidance)
+│   │   │   ├── analyst.py          # SWOT analysis (rework-aware)
+│   │   │   ├── writer.py           # Final report synthesis (rework-aware)
+│   │   │   └── qc.py               # Deterministic + LLM critique → role-routed rework
 │   │   │
 │   │   ├── orchestration/
-│   │   │   ├── graph.py            # LangGraph DAG with conditional edges
+│   │   │   ├── graph.py            # LangGraph DAG: role-targeted rework, concurrency, checkpoints
 │   │   │   └── state.py            # GraphState + static DAG metadata for FE
 │   │   │
 │   │   ├── schema/
-│   │   │   ├── competitor.py       # Three-pillar schema + SourceRef
+│   │   │   ├── competitor.py       # Three-pillar schema + SourceRef + ConflictFlag + confidence
 │   │   │   ├── messages.py         # AgentMessage / QCReport / QCFinding
-│   │   │   └── report.py           # FinalReport + ReportMetrics
+│   │   │   └── report.py           # FinalReport + ReportMetrics + Correction + SchemaSuggestion + KnowledgeDiff
 │   │   │
 │   │   ├── llm/
 │   │   │   ├── volcengine.py       # Ark async client + retries
@@ -79,14 +86,24 @@ competitive-analysis-agent/
 │   │   │   └── tracer.py           # Per-run TraceEvent recorder + SSE queue
 │   │   │
 │   │   ├── storage/
-│   │   │   └── store.py            # SQLite (reports + traces)
+│   │   │   └── store.py            # SQLite: reports, traces, knowledge snapshots,
+│   │   │                           #   corrections, run registry, checkpoints
 │   │   │
 │   │   └── scripts/
 │   │       └── demo.py             # One-shot CLI: produces a full report
 │   │
 │   └── tests/
+│       ├── conftest.py             # Mock mode + isolated data dir
 │       ├── test_schema.py
-│       ├── test_qc.py
+│       ├── test_qc.py              # Deterministic checks incl. role routing
+│       ├── test_consistency.py     # Conflict detection + majority vote
+│       ├── test_json_repair.py     # JSON recovery pipeline
+│       ├── test_knowledge.py       # Cross-run diff
+│       ├── test_routing.py         # Role-targeted rework routing
+│       ├── test_learning.py        # Active-learning guidance
+│       ├── test_robots.py          # Compliance helpers
+│       ├── test_checkpoint.py      # Checkpoint + resume
+│       ├── test_api.py             # End-to-end ASGI (start→edit→knowledge→meta)
 │       └── test_orchestration.py   # Full DAG, mock mode, including rework loop
 │
 ├── frontend/
@@ -103,13 +120,15 @@ competitive-analysis-agent/
 │       ├── index.css               # Tailwind + DAG node styles
 │       │
 │       ├── pages/
-│       │   ├── Home.tsx            # Form + DAG + live trace list
-│       │   ├── Report.tsx          # Tabs: report / competitors / trace / sources
-│       │   └── History.tsx         # Past report list
+│       │   ├── Home.tsx            # Form + DAG + live trace list + resume button
+│       │   ├── Report.tsx          # Tabs: report / comparison / competitors /
+│       │   │                       #   evolution / trace / sources; inline edit + conflicts
+│       │   └── History.tsx         # Past report list + meta self-eval panel
 │       │
 │       ├── components/
 │       │   ├── AnalysisForm.tsx    # Product + market-chip selector
-│       │   ├── DAGFlow.tsx         # ReactFlow visualization w/ status colors
+│       │   ├── AgentFlow.tsx       # Agent-flow + decision-trace replay (by rework round)
+│       │   ├── ComparisonView.tsx  # Charts + comparison tables
 │       │   ├── TraceList.tsx       # Expandable per-event drill-down
 │       │   └── SourceBadge.tsx     # Inline citation chip
 │       │
@@ -120,6 +139,10 @@ competitive-analysis-agent/
 │           ├── index.ts            # marketToLocale + makeT
 │           ├── zh.ts               # 🇨🇳 zh-CN bundle
 │           └── en.ts               # 🇺🇸 en-US bundle
+│
+├── .github/
+│   └── workflows/
+│       └── ci.yml                  # Backend pytest + frontend typecheck/build
 │
 └── scripts/
     ├── start-backend.ps1           # venv setup + python main.py
@@ -132,11 +155,11 @@ competitive-analysis-agent/
 | Area | Files |
 | --- | --- |
 | Documentation | 8 |
-| Backend Python | ~30 |
-| Frontend TS/TSX | ~12 |
-| Configuration | 6 |
+| Backend Python | ~40 |
+| Frontend TS/TSX | ~13 |
+| Configuration | 7 |
 | Scripts | 3 |
-| Tests | 3 |
+| Tests | 11 |
 
 ## Reading order for reviewers
 

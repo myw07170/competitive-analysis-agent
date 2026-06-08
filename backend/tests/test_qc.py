@@ -1,16 +1,16 @@
 """QC agent deterministic-checks tests.
 
-We exercise the deterministic path directly (no LLM needed). This validates
-the part of QC that the rubric considers "real" feedback.
+We exercise the deterministic path directly (no LLM needed). This validates the
+part of QC that the rubric considers "real" feedback — including the role-routed
+collector / analyst / writer checks.
 """
 from __future__ import annotations
-
-import pytest
 
 from app.agents.qc import QCAgent, _looks_placeholder
 from app.config import get_settings
 from app.market import get_market
 from app.schema import (
+    AgentRole,
     CompetitorKnowledge,
     FunctionTree,
     PricingModel,
@@ -25,25 +25,34 @@ from app.schema.competitor import FunctionNode
 
 def _full_competitor() -> CompetitorKnowledge:
     s = [
-        SourceRef(kind="web", title=f"t{i}", url=f"https://real-vendor-{i}.example.org",
+        SourceRef(kind="web", title=f"t{i}", url=f"https://real-vendor-{i}.io",
                   snippet="...", confidence=0.8)
         for i in range(3)
     ]
     return CompetitorKnowledge(
         name="X",
-        homepage="https://real-vendor.example.org",
+        homepage="https://real-vendor.io",
         function_tree=FunctionTree(
             root_name="caps",
             nodes=[FunctionNode(name="a", sources=[s[0]])],
         ),
         pricing=PricingModel(
-            tiers=[PricingTier(name="Free", currency="USD", sources=[s[0], s[1]])],
+            tiers=[PricingTier(name="Free", monthly_price=0, currency="USD", sources=[s[0], s[1]])],
         ),
         user_profile=UserProfile(
             segments=[UserSegment(name="SMB", sources=[s[2]])],
         ),
         sources=s,
     )
+
+
+def _labelled(c: CompetitorKnowledge):
+    return [("competitors[0]", c)]
+
+
+def _collector(c, min_sources):
+    qc = QCAgent(get_market("us"))
+    return qc._collector_checks(_labelled(c), min_sources, get_settings().min_confidence)
 
 
 def test_placeholder_url_detection():
@@ -53,20 +62,17 @@ def test_placeholder_url_detection():
 
 
 def test_full_competitor_passes():
-    qc = QCAgent(get_market("us"))
-    findings = qc._deterministic_checks([_full_competitor()],
-                                        get_settings().min_sources_per_competitor)
-    # Should be 0 deterministic findings on a fully-populated competitor.
+    findings = _collector(_full_competitor(), get_settings().min_sources_per_competitor)
+    # Should be 0 deterministic collector findings on a fully-populated competitor.
     assert findings == []
 
 
 def test_missing_pricing_tier_is_major():
     c = _full_competitor()
     c.pricing.tiers = []
-    qc = QCAgent(get_market("us"))
-    findings = qc._deterministic_checks([c], 3)
-    assert any(f.severity == Severity.MAJOR
-               and "pricing.tiers" in f.target_path for f in findings)
+    findings = _collector(c, 3)
+    assert any(f.severity == Severity.MAJOR and "pricing.tiers" in f.target_path
+               for f in findings)
 
 
 def test_low_source_count_is_major():
@@ -74,16 +80,22 @@ def test_low_source_count_is_major():
     c.sources = []
     c.pricing.tiers = [PricingTier(name="Free", currency="USD",
                                    sources=[SourceRef(kind="web", title="x")])]
-    qc = QCAgent(get_market("us"))
-    findings = qc._deterministic_checks([c], 5)
-    assert any(f.severity == Severity.MAJOR
-               and "sources" in f.target_path for f in findings)
+    findings = _collector(c, 5)
+    assert any(f.severity == Severity.MAJOR and "sources" in f.target_path
+               for f in findings)
 
 
 def test_empty_function_tree_is_blocker():
     c = _full_competitor()
     c.function_tree.nodes = []
+    findings = _collector(c, 3)
+    assert any(f.severity == Severity.BLOCKER and "function_tree" in f.target_path
+               for f in findings)
+
+
+def test_missing_swot_routes_to_analyst():
     qc = QCAgent(get_market("us"))
-    findings = qc._deterministic_checks([c], 3)
-    assert any(f.severity == Severity.BLOCKER
-               and "function_tree" in f.target_path for f in findings)
+    c = _full_competitor()  # no swot set
+    findings = qc._analyst_checks(_labelled(c))
+    assert any(f.target_agent == AgentRole.ANALYST and f.severity == Severity.MAJOR
+               and "swot" in f.target_path for f in findings)

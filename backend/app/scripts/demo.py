@@ -4,8 +4,8 @@ Usage:
     python -m app.scripts.demo --product "Notion" --market us
     python -m app.scripts.demo --product "飞书" --market cn --json
 """
-from __future__ import annotations
-
+# NOTE: deliberately no `from __future__ import annotations` — it stringifies
+# annotations and breaks Typer's option type introspection.
 import asyncio
 import json
 
@@ -18,11 +18,9 @@ from ..observability.tracer import Tracer
 from ..orchestration import AnalysisRequest, run_analysis
 
 
-app = typer.Typer(add_completion=False, help="Run one analysis end-to-end and print the report.")
 console = Console()
 
 
-@app.command()
 def main(
     product: str = typer.Option(..., "--product", "-p", help="Target product name"),
     market: str = typer.Option("us", "--market", "-m", help="Market code: cn | us"),
@@ -58,8 +56,11 @@ def main(
     t.add_row("LLM calls", str(metrics.total_llm_calls))
     t.add_row("Schema completeness", f"{metrics.schema_completeness*100:.0f}%")
     t.add_row("Avg sources / competitor", f"{metrics.avg_sources_per_competitor}")
+    t.add_row("Avg confidence", f"{metrics.avg_confidence*100:.0f}%")
+    t.add_row("Source conflicts", str(metrics.conflict_count))
     t.add_row("QC iterations", str(metrics.qc_iterations))
     t.add_row("Rework count", str(metrics.rework_count))
+    t.add_row("Manual-correction rate", f"{metrics.manual_correction_rate*100:.0f}%")
     console.print(t)
 
     console.print(Panel(report.executive_summary_md, title="Executive summary"))
@@ -71,4 +72,4 @@ def main(
 
 
 if __name__ == "__main__":
-    app()
+    typer.run(main)

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { deleteReport, listReports } from "../api/client";
+import { MetaReport, deleteReport, getMetaSuggestions, listReports } from "../api/client";
 import { makeT, marketToLocale } from "../i18n";
 
 interface HistoryProps {
@@ -38,6 +38,7 @@ export default function History({ market }: HistoryProps) {
   return (
     <div className="max-w-5xl mx-auto px-6 py-6">
       <h1 className="text-xl font-semibold mb-3">{t("history.title")}</h1>
+      <MetaPanel t={t} />
       {loading && <div className="text-slate-500">{t("common.loading")}</div>}
       {!loading && rows.length === 0 && (
         <div className="text-slate-500 text-sm">{t("history.empty")}</div>
@@ -104,6 +105,90 @@ export default function History({ market }: HistoryProps) {
               >
                 {deleting ? t("history.deleting") : t("common.confirm")}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Agent self-evaluation: field completeness + schema-evolution suggestions. */
+function MetaPanel({ t }: { t: (k: string, v?: Record<string, string | number>) => string }) {
+  const [meta, setMeta] = useState<MetaReport | null>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    getMetaSuggestions().then(setMeta).catch(() => {});
+  }, []);
+
+  if (!meta || meta.n_competitors === 0) return null;
+
+  const actionLabel = (a: string) => t(`meta.action.${a}`) || a;
+  const entries = Object.entries(meta.field_completeness).sort((a, b) => a[1] - b[1]);
+
+  return (
+    <div className="border rounded-xl mb-5 bg-white">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 px-4 py-3 text-left"
+      >
+        <span className="font-semibold text-sm">🧭 {t("meta.title")}</span>
+        <span className="text-xs text-slate-400">
+          {t("meta.reports")}: {meta.n_reports} · {t("meta.competitors")}: {meta.n_competitors} ·{" "}
+          {t("meta.suggestions")}: {meta.suggestions.length}
+        </span>
+        <span className={"ml-auto text-slate-400 transition-transform " + (open ? "rotate-90" : "")}>
+          ▸
+        </span>
+      </button>
+      {open && (
+        <div className="px-4 pb-4 space-y-4">
+          <p className="text-xs text-slate-500">{t("meta.help")}</p>
+
+          {meta.suggestions.length === 0 && (
+            <div className="text-sm text-slate-400">{t("meta.no_suggestions")}</div>
+          )}
+          {meta.suggestions.length > 0 && (
+            <div className="space-y-2">
+              {meta.suggestions.map((s, i) => (
+                <div key={i} className="border rounded-lg px-3 py-2 flex items-start gap-3">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 shrink-0 uppercase">
+                    {actionLabel(s.action)}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-sm font-mono text-slate-700">{s.field}</div>
+                    <div className="text-xs text-slate-500">{s.rationale}</div>
+                  </div>
+                  <span className="ml-auto text-[11px] text-slate-400 shrink-0">
+                    {(s.confidence * 100).toFixed(0)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div>
+            <div className="text-xs font-medium text-slate-600 mb-1">{t("meta.completeness")}</div>
+            <div className="space-y-1">
+              {entries.map(([field, frac]) => (
+                <div key={field} className="flex items-center gap-2 text-xs">
+                  <span className="w-48 shrink-0 font-mono text-slate-500 truncate">{field}</span>
+                  <div className="flex-1 h-2 bg-slate-100 rounded overflow-hidden">
+                    <div
+                      className={
+                        "h-2 " +
+                        (frac < 0.2 ? "bg-rose-400" : frac < 0.6 ? "bg-amber-400" : "bg-emerald-400")
+                      }
+                      style={{ width: `${Math.round(frac * 100)}%` }}
+                    />
+                  </div>
+                  <span className="w-10 text-right tabular-nums text-slate-500">
+                    {Math.round(frac * 100)}%
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>

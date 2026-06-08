@@ -55,7 +55,23 @@ All configuration is via environment variables (or `.env`). See `backend/.env.ex
 | `SEARCH_PROVIDER` | `none` | `tavily` / `serper` / `bing` / `none` |
 | `MAX_QC_ITERATIONS` | `2` | Maximum rework loops |
 | `MIN_SOURCES_PER_COMPETITOR` | `3` | QC threshold |
+| `COLLECTOR_CONCURRENCY` | `3` | Parallel per-competitor collect/analyze (1 = sequential) |
+| `MIN_CONFIDENCE` | `0.55` | Claims below this trigger confidence-aware re-collection |
+| `SELF_CONSISTENCY_SAMPLES` | `1` | N-sample majority vote on competitor identification (1 = off) |
+| `ENABLE_CONFLICT_DETECTION` | `1` | Cross-source conflict flagging |
 | `RESPECT_ROBOTS` | `1` | Set to `0` only for testing |
+
+### API surface
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/analysis/start` · `GET .../stream/{id}` · `GET .../status/{id}` · `GET .../dag` · `GET .../markets` | Run lifecycle + live SSE + DAG metadata |
+| `POST /api/analysis/resume/{run_id}` | Resume an interrupted run from its last checkpoint |
+| `GET/DELETE /api/reports/{id}` · `GET .../html` | Read / delete / export a report |
+| `PATCH /api/reports/{id}` | Human-in-the-loop field edit (records a `Correction`) |
+| `GET /api/traces/{run_id}` | Decision-trace replay |
+| `GET /api/knowledge/{entities,history,diff}` | Cross-run competitor evolution |
+| `GET /api/meta/{suggestions,corrections}` | Agent self-evaluation + correction feed |
 
 ## 3. Production deployment
 
@@ -127,8 +143,8 @@ CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 ### 3.3 Scaling
 
-* **Vertical scale**: increase `--workers` on uvicorn. Each worker is an isolated event loop; the in-process `_RUNS` registry means SSE clients must hit the same worker as the start request — see "Horizontal scale" below for the fix.
-* **Horizontal scale**: replace the in-process `_RUNS` registry with Redis pub/sub (one-line change in [`backend/app/api/analysis.py`](../backend/app/api/analysis.py)). The Tracer already emits to an async queue.
+* **Vertical scale**: increase `--workers` on uvicorn. The run registry is now **persisted to SQLite** (`runs` + `run_checkpoints` tables), so `GET /api/analysis/status` and `/stream` fall back to the database when a run is not in the local worker's memory — status and trace replay survive a restart. The live SSE *push* still requires hitting the worker that owns the in-memory `Tracer` queue; for true multi-worker live streaming, swap that queue for Redis pub/sub.
+* **Resumability**: because every node checkpoints `GraphState`, a run interrupted by a crash/restart can be continued with `POST /api/analysis/resume/{run_id}` instead of restarting from scratch.
 * **Persistent storage**: SQLite is fine for prototype. For production-grade, switch to Postgres — `aiosqlite` ↔ `asyncpg` is mostly mechanical, the table schema is identical.
 
 ## 4. Observability in production
@@ -136,13 +152,14 @@ CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
 * All log lines are structured (component, level, message). Pipe stderr to your log aggregator.
 * The `/api/traces/{run_id}` endpoint is the source of truth for replay.
 * `report.metrics` contains per-run KPIs that you should ingest into your BI tool to track:
-  * `elapsed_seconds`
-  * `total_tokens`
-  * `schema_completeness`
-  * `avg_sources_per_competitor`
+  * `elapsed_seconds`, `total_tokens`
+  * `schema_completeness`, `avg_sources_per_competitor`
+  * `avg_confidence`, `low_confidence_claims`, `conflict_count`
   * `qc_iterations`, `rework_count`
+  * `manual_correction_rate`, `corrected_fields`
+* `GET /api/meta/suggestions` exposes cross-run aggregates (field completeness, recurring corrections/conflicts) for the agent self-evaluation dashboard.
 
-These map directly to the "business loop" metrics the rubric calls out: efficiency (time), coverage (sources), consistency (schema completeness), and manual-correction rate (rework count → operator-edits ratio when you add a manual-edit UI in v1.1).
+These map directly to the "business loop" metrics the rubric calls out: efficiency (time), coverage (sources), consistency (schema completeness), credibility (avg confidence / conflicts), and **manual-correction rate** — now a first-class metric, recomputed on every human edit via `PATCH /api/reports/{id}`.
 
 ## 5. Common issues
 

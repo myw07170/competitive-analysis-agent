@@ -6,6 +6,7 @@ import {
   TraceEvent,
   getDag,
   getMarkets,
+  resumeRun,
   startAnalysis,
   streamRun,
 } from "../api/client";
@@ -45,6 +46,8 @@ export default function Home({ market, setMarket }: HomeProps) {
   const [error, setError] = useState<string | null>(null);
   const [plannedCompetitors, setPlannedCompetitors] = useState<number>(0);
   const [submittedProduct, setSubmittedProduct] = useState<string>("");
+  const [runId, setRunId] = useState<string | null>(null);
+  const [resuming, setResuming] = useState(false);
   // Furthest pipeline stage reached in the current cycle — a collect event
   // arriving after we've already passed collect signals a QC rework loop.
   const frontierRef = useRef(0);
@@ -82,7 +85,30 @@ export default function Home({ market, setMarket }: HomeProps) {
     });
 
     const start = await startAnalysis({ product, market, extra_competitors: extra });
-    streamRun(start.run_id, {
+    setRunId(start.run_id);
+    attachStream(start.run_id, extra);
+  }
+
+  // Resume an interrupted run from its last checkpoint.
+  async function onResume() {
+    if (!runId) return;
+    setResuming(true);
+    setError(null);
+    setPhase("running");
+    try {
+      const r = await resumeRun(runId);
+      pushLog({ node: "qc", tone: "info", text: t("resume.resuming") });
+      attachStream(r.run_id, []);
+    } catch (e) {
+      setPhase("error");
+      setError(String(e));
+    } finally {
+      setResuming(false);
+    }
+  }
+
+  function attachStream(streamRunId: string, extra: string[]) {
+    streamRun(streamRunId, {
       onTrace: (ev) => {
         setEvents((prev) => [...prev, ev]);
         const n = intentToNode(ev.intent);
@@ -170,7 +196,7 @@ export default function Home({ market, setMarket }: HomeProps) {
         } else {
           pushLog({ node: "done", tone: "ok", text: t("progress.done") });
         }
-        if (info.report_id) navigate(`/report/${info.report_id}?run=${start.run_id}`);
+        if (info.report_id) navigate(`/report/${info.report_id}?run=${streamRunId}`);
       },
       onError: (err) => {
         setPhase("error");
@@ -261,8 +287,18 @@ export default function Home({ market, setMarket }: HomeProps) {
       </div>
 
       {error && (
-        <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl p-4 text-sm">
-          {t("common.error")}: {error}
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl p-4 text-sm flex items-start gap-3">
+          <span className="flex-1">{t("common.error")}: {error}</span>
+          {runId && (
+            <button
+              type="button"
+              disabled={resuming}
+              onClick={onResume}
+              className="shrink-0 text-xs px-3 py-1.5 rounded border border-rose-300 text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+            >
+              {resuming ? t("resume.resuming") : `↻ ${t("resume.label")}`}
+            </button>
+          )}
         </div>
       )}
 

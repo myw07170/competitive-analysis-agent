@@ -9,7 +9,7 @@ This document specifies the role, inputs, outputs, and message protocol of each 
 | Collector | [`backend/app/agents/collector.py`](../backend/app/agents/collector.py) | Identify competitors and gather structured knowledge per competitor | User request, web search, robots-compliant fetcher, LLM | `GraphState.competitor_names`, `GraphState.competitors` |
 | Analyst | [`backend/app/agents/analyst.py`](../backend/app/agents/analyst.py) | Produce SWOT for each competitor | `GraphState.competitors` | `competitor.swot` |
 | Writer | [`backend/app/agents/writer.py`](../backend/app/agents/writer.py) | Synthesize the final report | `GraphState.competitors` (with SWOT) | `GraphState.report` |
-| Quality control | [`backend/app/agents/qc.py`](../backend/app/agents/qc.py) | Critique structure / coverage / hallucinations | `GraphState.competitors` | `GraphState.qc_history`, `GraphState.last_qc` |
+| Quality control | [`backend/app/agents/qc.py`](../backend/app/agents/qc.py) | Critique structure / coverage / hallucinations / confidence / conflicts; route rework | `GraphState.competitors`, `GraphState.report` | `GraphState.qc_history`, `GraphState.last_qc`, `GraphState.messages` |
 
 These responsibilities are **non-overlapping**:
 
@@ -33,7 +33,7 @@ class AgentMessage(BaseModel):
     created_at: datetime
 ```
 
-For the QC ↔ Collector feedback loop, the QC payload is a `QCReport` containing a list of `QCFinding`s. Each finding carries `target_agent`, `target_path` (JSONPath-ish), `severity`, `issue`, and `suggested_fix`. The orchestrator translates the report into a `rework_notes` string that the Collector receives as part of its next prompt.
+For the QC → upstream feedback loop, the QC payload is a `QCReport` containing a list of `QCFinding`s. Each finding carries `target_agent` (collector / analyst / writer), `target_path` (JSONPath-ish), `severity`, `issue`, and `suggested_fix`. When QC requests rework, the orchestrator builds **one typed `AgentMessage(intent="request_rework")` per receiving agent** ([`graph.py:_emit_rework_messages`](../backend/app/orchestration/graph.py)), stores them in `GraphState.messages`, and records each as a trace event — so the structured hand-off is observable, not just an internal string. Each receiving agent is then re-run with only the slice of findings addressed to it (and, for the collector, only for the competitors it flagged).
 
 Schemas live in [`backend/app/schema/messages.py`](../backend/app/schema/messages.py).
 
@@ -65,6 +65,7 @@ Schemas live in [`backend/app/schema/messages.py`](../backend/app/schema/message
 ### Inputs
 * `product: str`
 * `competitor: CompetitorKnowledge`
+* `rework_notes: str | None` — analyst-targeted QC findings (so QC can route rework here)
 
 ### Steps
 1. Serialize the competitor to JSON, truncate to 6 KB, include in prompt.
@@ -84,6 +85,8 @@ Schemas live in [`backend/app/schema/messages.py`](../backend/app/schema/message
 * `product: str`
 * `report_id: str`
 * `competitors: List[CompetitorKnowledge]` (with SWOT attached)
+* `target_product: CompetitorKnowledge | None` — the user's own product, compared alongside
+* `rework_notes: str | None` — writer-targeted QC findings (e.g. broken citations, missing coverage)
 
 ### Steps
 1. Build a locale-aware prompt with the localized section headings.
@@ -109,14 +112,28 @@ The QC agent combines **deterministic** checks (Python) with an **LLM critique**
 * Same checks framed as soft critique.
 * Asked to detect language mismatches, prose inconsistencies, and obvious schema-shape errors not caught above.
 
+### What QC reviews
+QC reviews **both** the collected `CompetitorKnowledge` *and* the final `FinalReport`, producing role-routed findings:
+* **Collector-owned** — source count, empty function tree, missing/unsourced pricing tiers, placeholder URLs, missing user segments, **low-confidence claims** (below `MIN_CONFIDENCE`), and **cross-source conflicts** (`ConflictFlag`s from [`consistency.py`](../backend/app/consistency.py)).
+* **Analyst-owned** — missing SWOT, empty SWOT buckets, SWOT items with no source.
+* **Writer-owned** — empty executive summary, **broken `[^src_xxx]` citations** (referencing unknown source IDs), competitors not covered in the narrative.
+
 ### Output
 `QCReport` with one of three decisions:
 * `approve` — no findings; or only `info`-level.
 * `approve_with_notes` — minor findings only; ship the report.
-* `rework` — at least one blocker, or > 1 major. Routes back to `collect`.
+* `rework` — at least one blocker, or ≥ 1 major. Routes to the **earliest stage that owns a blocking/major finding** — `collect`, `analyze`, or `write` (see [`_route_after_qc`](../backend/app/orchestration/graph.py)), not blindly back to `collect`.
 
 ### Loop bound
 The orchestrator caps iterations at `MAX_QC_ITERATIONS` (default 2). After that, the run finishes regardless of QC's verdict — the report ships with the final QC notes attached.
+
+## 8. Meta-evaluator (agent self-evaluation)
+
+[`MetaEvaluator`](../backend/app/meta.py) is not part of the per-run DAG; it runs on demand (`GET /api/meta/suggestions`) across **all historical reports**. It aggregates field completeness, recurring human corrections, and recurring source conflicts into `SchemaSuggestion`s (deprecate / make-optional / tighten-prompt). This closes the "Agent self-assessment / dynamic schema evolution" loop: `schema_version` is persisted with every report, so accepted suggestions can roll forward without invalidating history.
+
+## 9. Active learning
+
+Human edits (`PATCH /api/reports/{id}`) are stored as `Correction`s. [`learning.recent_guidance`](../backend/app/learning.py) distills the most recent corrections for a market into a "lessons learned" block injected into the Collector/Writer system prompts on the next run — so the `manual_correction_rate` KPI should trend down over time.
 
 ## 7. Prompts
 

@@ -31,9 +31,19 @@ def respond(intent: str, *, system: str, user: str) -> Dict[str, Any]:
 
 
 def _detect_market(text: str) -> str:
-    if re.search(r"market\s*[:=]?\s*us", text, re.IGNORECASE) or "en-US" in text:
+    """Best-effort market inference from a prompt, for the mock backend only.
+
+    Checks robust signals in priority order: the explicit ``(us)`` / ``(cn)``
+    market code emitted by the prompts, the locale tag, the fixed market display
+    names, and finally the presence of CJK characters.
+    """
+    t = text.lower()
+    if any(sig in t for sig in ("en-us", "(us)", "united states")):
         return "us"
-    return "cn"
+    if "zh-cn" in t or "(cn)" in t or "中国" in text:
+        return "cn"
+    # Fallback: any CJK character → Chinese market, else US.
+    return "cn" if re.search(r"[一-鿿]", text) else "us"
 
 
 def _detect_product(text: str) -> str:
@@ -369,7 +379,7 @@ def _report(system: str, user: str) -> Dict[str, Any]:
             "sections": [
                 {"heading": "Market overview",
                  "body_md": "The US knowledge-work tooling market is mature and AI-native entrants are "
-                             "compressing per-seat economics. [^src_market1]",
+                             "compressing per-seat economics across Notion, Coda, and ClickUp.",
                  "sources": []},
                 {"heading": "Function comparison",
                  "body_md": "All three competitors cover Docs + Databases + AI at GA. Differences "
@@ -399,7 +409,7 @@ def _report(system: str, user: str) -> Dict[str, Any]:
         ),
         "sections": [
             {"heading": "市场概览",
-             "body_md": "中国协作工具市场进入存量竞争阶段,AI 原生能力成为新的竞争焦点。[^src_m1]",
+             "body_md": "中国协作工具市场进入存量竞争阶段,AI 原生能力成为新的竞争焦点。",
              "sources": []},
             {"heading": "功能对比",
              "body_md": "三家竞品在 IM + 文档 + 视频会议 + AI 四大基础能力上已覆盖完整,差异体现在"

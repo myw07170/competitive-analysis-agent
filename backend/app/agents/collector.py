@@ -1,11 +1,11 @@
 """Collector Agent.
 
 Two-step:
-1. ``identify_competitors`` — get the top-3 list.
-2. ``gather_competitor``    — for each, produce a CompetitorKnowledge.
-
-When a search backend is configured, the agent grounds step 2 with real web
-snippets that it injects into the prompt as evidence.
+1. ``identify_competitors`` — get the top-3 list (with optional self-consistency
+   voting across N samples).
+2. ``gather_competitor``    — for each, produce a CompetitorKnowledge, grounded
+   in web evidence when a search backend is configured, and steered by any QC
+   rework notes plus accumulated human-correction guidance (active learning).
 """
 from __future__ import annotations
 
@@ -14,6 +14,8 @@ from typing import Dict, List, Optional
 from ..collectors import search
 from ..collectors.web import fetch_page
 from ..config import get_settings
+from ..consistency import majority_vote
+from ..learning import recent_guidance
 from ..prompts import (
     COLLECTOR_SYSTEM,
     GATHER_COMPETITOR_USER,
@@ -33,13 +35,36 @@ class CollectorAgent(BaseAgent):
             market_display=self.market.display_name,
             market_code=self.market.code,
         )
-        out = await self._call(
-            intent="collector.identify_competitors",
-            system=sys_prompt,
-            user=user_prompt,
-            decision_label=f"identify_competitors({product})",
-        )
-        return out.get("competitors", [])
+        samples_n = get_settings().self_consistency_samples
+
+        async def _one(temperature: float) -> List[Dict]:
+            out = await self._call(
+                intent="collector.identify_competitors",
+                system=sys_prompt,
+                user=user_prompt,
+                temperature=temperature,
+                decision_label=f"identify_competitors({product})",
+            )
+            return out.get("competitors", []) or []
+
+        if samples_n <= 1:
+            return await _one(temperature=0.2)
+
+        # Self-consistency: draw N samples at higher temperature, keep the
+        # competitors a majority of samples agree on (more robust to one-off
+        # hallucinations than a single greedy answer).
+        all_names: List[List[str]] = []
+        raw_by_name: Dict[str, Dict] = {}
+        for i in range(samples_n):
+            comps = await _one(temperature=0.5 if i else 0.2)
+            names = [c["name"] for c in comps if c.get("name")]
+            all_names.append(names)
+            for c in comps:
+                if c.get("name") and c["name"] not in raw_by_name:
+                    raw_by_name[c["name"]] = c
+        voted = majority_vote(all_names, keep=4)
+        self.log.info(f"self-consistency vote ({samples_n} samples) -> {voted}")
+        return [raw_by_name.get(n, {"name": n}) for n in voted]
 
     async def gather_competitor(
         self,
@@ -54,7 +79,9 @@ class CollectorAgent(BaseAgent):
             f"\n[Previous QC findings to address in this rework iteration]:\n{rework_notes}\n"
             if rework_notes else ""
         )
-        sys_prompt = COLLECTOR_SYSTEM.format(language=self.language_name)
+        # Active learning: fold in lessons learned from past human corrections.
+        guidance = await recent_guidance(self.market.code)
+        sys_prompt = COLLECTOR_SYSTEM.format(language=self.language_name) + guidance
         user_prompt = GATHER_COMPETITOR_USER.format(
             product=product,
             market_display=self.market.display_name,

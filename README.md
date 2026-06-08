@@ -17,9 +17,9 @@ Given a product name and a target market (🇨🇳 China / 🇺🇸 US), the sys
 2. **Structure** the information against a strict competitor knowledge **Schema** (function tree, pricing model, user profile).
 3. **Analyze** competitors (SWOT, positioning, differentiation).
 4. **Write** a polished, traceable report.
-5. **Quality-control** the output — the QC agent can return the work to upstream agents for **real** rework, not a pseudo-loop.
+5. **Quality-control** the output — the QC agent reviews both the collected knowledge and the final report, then returns work to the **specific** upstream agent that owns each defect (collector / analyst / writer) for **real, targeted** rework — not a pseudo-loop.
 
-Every conclusion is **source-traceable** (URL / doc / interview ID), and every agent decision is **observable** via structured logs and traces.
+Every conclusion is **source-traceable** (URL / doc / interview ID) with a confidence score, and every agent decision is **observable** via structured logs and traces. A reviewer can **edit any field in place** (human-in-the-loop), and those edits feed an **active-learning loop** that steers future runs.
 
 ---
 
@@ -27,13 +27,27 @@ Every conclusion is **source-traceable** (URL / doc / interview ID), and every a
 
 | Scoring dimension | How this project addresses it |
 | --- | --- |
-| **Multi-agent collaboration & credibility (35%)** | Four specialized agents with non-overlapping responsibilities; LangGraph DAG with visualization; structured `AgentMessage` schema with `function_calling`-style payloads; real feedback loop where QC rework changes downstream outputs; strict Pydantic schema validation; every fact carries a `SourceRef`. |
-| **Technical depth & engineering (25%)** | End-to-end stack (Collector → Orchestration → Knowledge Store → API → Frontend); per-agent trace records with prompt/input/output/tokens; context fragmentation, self-consistency checks, citation enforcement; retry/timeout/fallback wrappers; mock mode for resilient demos. |
-| **Business value & UX (20%)** | Real workflow shaping (input → DAG progress → report → trace → manual fix → replay); quantifiable metrics (time saved, source coverage, schema completeness, manual-correction rate) tracked in `metrics`; market-pluggable architecture (CN / US today, extensible to any market). |
-| **Code quality & docs (10%)** | Modular layout, typed Python, fully-documented agent protocol, architecture diagram, deployment guide, extension guide, conventional-commit-friendly. |
-| **Compliance & materials (10%)** | `robots.txt` guard on every fetch, ToS-respecting collectors, PII redaction on interview/questionnaire data, declared use of LLMs (Volcengine Ark) and search providers, full submission bundle (proposal, video script, repo). |
+| **Multi-agent collaboration & credibility (35%)** | Four specialized agents with non-overlapping responsibilities; LangGraph DAG with visualization; **structured inter-agent protocol** — every hand-off is a validated Pydantic object (`CompetitorKnowledge`, `QCReport`), and QC rework is dispatched as a typed `AgentMessage(intent="request_rework")` recorded in the trace; **real, role-targeted feedback loop** — QC reviews the collected knowledge *and the final report*, then routes rework to the agent that owns the defect (collector / analyst / writer), re-collecting only the flagged competitors; strict schema validation; every fact carries a `SourceRef` with a confidence score. |
+| **Technical depth & engineering (25%)** | End-to-end stack (Collector → Orchestration → Knowledge Store → API → Frontend); per-agent trace records with prompt/input/output/tokens; **confidence-aware orchestration**, **cross-source conflict detection**, self-consistency voting, citation enforcement; concurrent per-competitor collection; **DAG checkpoint + resume**; externalized run registry; retry/timeout/fallback wrappers; mock mode for resilient demos. |
+| **Business value & UX (20%)** | Real workflow shaping (input → DAG progress → report → trace → **human-in-the-loop edit** → replay); quantifiable metrics (time, source coverage, schema completeness, avg confidence, conflicts, **manual-correction rate**) tracked in `metrics`; **cross-run knowledge evolution** (diff a competitor across runs); **agent self-evaluation** that proposes schema changes; market-pluggable architecture (CN / US today, extensible to any market). |
+| **Code quality & docs (10%)** | Modular layout, typed Python, fully-documented agent protocol, architecture diagram, deployment guide, extension guide; backend `pytest` suite + frontend typecheck/build run in **CI** (`.github/workflows/ci.yml`). |
+| **Compliance & materials (10%)** | `robots.txt` guard on every fetch, ToS-respecting collectors, synthetic-only interview/questionnaire data clearly labeled (real-data import + mandatory PII-redaction pass is **specified as planned v1.1**, see [`docs/compliance.md`](docs/compliance.md) §4), declared use of LLMs (Volcengine Ark) and search providers, full submission bundle (proposal, video script, repo). |
 
 ---
+
+## 2.1 Capabilities (v1.1)
+
+Beyond the baseline pipeline, the system implements:
+
+- **Role-targeted feedback loop** — `qc` routes rework back to `collect`, `analyze`, **or** `write` depending on which agent owns the blocking finding ([`orchestration/graph.py:_route_after_qc`](backend/app/orchestration/graph.py)). Only the flagged competitors are re-collected ("targeted rework"), and each agent receives the slice of QC findings addressed to it, carried as a typed `AgentMessage`.
+- **Confidence-aware orchestration** — every claim aggregates the confidence of its sources; weak-evidence claims become re-collection candidates. Surfaced as the `avg_confidence` / `low_confidence_claims` metrics.
+- **Self-consistency + cross-source conflict detection** — competitor identification can be majority-voted across N samples; pricing/currency/capability contradictions are flagged as `ConflictFlag`s and rendered as "⚠ source conflict" badges ([`consistency.py`](backend/app/consistency.py)).
+- **Human-in-the-loop editing** — `PATCH /api/reports/{id}` applies field edits, records a `Correction` audit trail, and recomputes the **manual-correction-rate** KPI.
+- **Active learning** — recent corrections are distilled into "lessons learned" injected into the Collector/Writer prompts ([`learning.py`](backend/app/learning.py)).
+- **Cross-run knowledge evolution** — each run snapshots every competitor by a normalized entity key; `GET /api/knowledge/diff` shows what changed since last time ([`knowledge.py`](backend/app/knowledge.py)).
+- **Agent self-evaluation / dynamic schema** — `GET /api/meta/suggestions` aggregates field completeness + recurring corrections/conflicts into schema-evolution suggestions ([`meta.py`](backend/app/meta.py)).
+- **DAG checkpoint + resume** — every node checkpoints `GraphState`; an interrupted run resumes from the last completed stage via `POST /api/analysis/resume/{run_id}`.
+- **Concurrency + durability** — per-competitor collection/analysis run concurrently (bounded semaphore); the run registry is persisted so status/trace survive a restart.
 
 ## 3. Architecture (at a glance)
 
@@ -174,7 +188,7 @@ The agents, schema, orchestrator, and UI components are all market-agnostic — 
 
 - **robots.txt** is fetched and respected for every external URL.
 - The collector identifies as `CompetitiveAnalysisAgent/1.0` with a contact URL in the User-Agent.
-- Questionnaire and interview data are **synthesized** by the LLM and clearly marked as synthetic; if a user imports real interview data, the system runs a PII redaction pass before storage.
+- Questionnaire and interview data are **synthesized** by the LLM and clearly marked as synthetic (`kind="interview" / "questionnaire"`, low confidence). There is **no real-PII ingestion path today**. A real-data import gated behind a mandatory PII-redaction pass is **specified as a planned v1.1 capability** — see [`docs/compliance.md`](docs/compliance.md) §4. The codebase does not yet ship that redaction code, and the docs no longer claim it does.
 - The system uses Volcengine Ark as the sole LLM provider. Search providers are configurable and respect each provider's ToS.
 
 See [`docs/compliance.md`](docs/compliance.md) for full details.

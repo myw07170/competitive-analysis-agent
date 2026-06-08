@@ -58,7 +58,10 @@ def dag_definition() -> dict:
         DagEdge("collect", "analyze"),
         DagEdge("analyze", "write"),
         DagEdge("write", "qc"),
-        DagEdge("qc", "collect", "rework"),
+        # Role-targeted rework: QC re-enters at whichever stage owns the defect.
+        DagEdge("qc", "collect", "rework→collector"),
+        DagEdge("qc", "analyze", "rework→analyst"),
+        DagEdge("qc", "write", "rework→writer"),
         DagEdge("qc", "done", "approve"),
     ]
     return {

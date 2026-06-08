@@ -5,7 +5,9 @@ is validated against them, which is what makes "structured message passing
 (function-calling style) instead of pure natural-language dialogue" enforceable.
 """
 from .competitor import (
+    Cited,
     CompetitorKnowledge,
+    ConflictFlag,
     FunctionNode,
     FunctionTree,
     PricingModel,
@@ -26,12 +28,19 @@ from .report import (
     ComparisonCell,
     ComparisonMatrix,
     ComparisonRow,
+    Correction,
     FinalReport,
+    KnowledgeChange,
+    KnowledgeDiff,
+    ReportMetrics,
     ReportSection,
+    SchemaSuggestion,
 )
 
 __all__ = [
+    "Cited",
     "CompetitorKnowledge",
+    "ConflictFlag",
     "FunctionNode",
     "FunctionTree",
     "PricingModel",
@@ -48,6 +57,11 @@ __all__ = [
     "ComparisonCell",
     "ComparisonMatrix",
     "ComparisonRow",
+    "Correction",
     "FinalReport",
+    "KnowledgeChange",
+    "KnowledgeDiff",
+    "ReportMetrics",
     "ReportSection",
+    "SchemaSuggestion",
 ]

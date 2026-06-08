@@ -31,11 +31,16 @@ class WriterAgent(BaseAgent):
         report_id: str,
         competitors: List[CompetitorKnowledge],
         target_product: Optional[CompetitorKnowledge] = None,
+        rework_notes: Optional[str] = None,
     ) -> FinalReport:
         loc = get_locale(self.market.locale)
         sys_prompt = WRITER_SYSTEM.format(language=self.language_name)
         competitor_names = ", ".join(c.name for c in competitors) or "—"
         competitor_names_pipe = " | ".join(c.name for c in competitors) or "—"
+        rework_block = (
+            f"\n[Previous QC findings to address in this rework iteration]:\n{rework_notes}\n"
+            if rework_notes else ""
+        )
         user_prompt = WRITER_USER.format(
             product=product,
             market_display=self.market.display_name,
@@ -53,7 +58,7 @@ class WriterAgent(BaseAgent):
                 [c.model_dump(mode="json") for c in competitors],
                 ensure_ascii=False, indent=2,
             )[:12000],
-        )
+        ) + rework_block
         raw = await self._call(
             intent="writer.report",
             system=sys_prompt,

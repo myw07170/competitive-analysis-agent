@@ -46,6 +46,16 @@ class Settings(BaseSettings):
     # --- Agent behavior ---
     max_qc_iterations: int = Field(default=2, ge=0, le=5)
     min_sources_per_competitor: int = Field(default=3, ge=1)
+    # Parallelism for per-competitor collection / analysis (1 = sequential).
+    collector_concurrency: int = Field(default=3, ge=1, le=16)
+    # Confidence-aware orchestration: claims whose best source is below this
+    # threshold are flagged by QC and become targeted re-collection candidates.
+    min_confidence: float = Field(default=0.55, ge=0.0, le=1.0)
+    # Self-consistency: how many independent samples to draw when identifying
+    # competitors (majority-voted). 1 = disabled (single sample).
+    self_consistency_samples: int = Field(default=1, ge=1, le=5)
+    # Deterministic cross-source conflict detection (Innovation-2).
+    enable_conflict_detection: bool = True
 
     @property
     def use_mock_llm(self) -> bool:

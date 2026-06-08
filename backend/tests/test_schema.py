@@ -22,9 +22,11 @@ def test_minimal_competitor_round_trips():
     assert c2.source_count() == 0
 
 
-def test_source_ref_rejects_bad_kind():
-    with pytest.raises(ValidationError):
-        SourceRef(kind="bogus")
+def test_source_ref_coerces_bad_kind():
+    # The schema deliberately falls back instead of crashing on free-text kinds
+    # the model invents — so a bogus kind becomes "llm_prior", not an error.
+    assert SourceRef(kind="bogus").kind == "llm_prior"
+    assert SourceRef(kind="web").kind == "web"
 
 
 def test_source_count_dedupes_by_id():

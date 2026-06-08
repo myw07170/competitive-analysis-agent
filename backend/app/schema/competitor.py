@@ -143,6 +143,34 @@ class Cited(BaseModel):
     value: str
     sources: List[SourceRef] = Field(default_factory=list)
 
+    def confidence(self) -> Optional[float]:
+        """Aggregate confidence for this claim = max confidence across its sources.
+
+        A claim is only as strong as its single best-supporting source. Returns
+        ``None`` when the claim carries no source at all (so callers can treat
+        "unsourced" distinctly from "low confidence").
+        """
+        if not self.sources:
+            return None
+        return max(s.confidence for s in self.sources)
+
+
+class ConflictFlag(BaseModel):
+    """A detected disagreement between sources (or internal inconsistency).
+
+    Surfaced in the UI as a "⚠ 来源分歧 / source conflict" badge so a reviewer
+    can see *where* the evidence disagrees rather than trusting a silently
+    picked value. Produced deterministically by ``app.consistency``.
+    """
+
+    field: str = Field(description="Dotted path of the field in conflict, e.g. 'pricing.tiers[Pro].monthly_price'")
+    kind: str = Field(default="value_mismatch",
+                      description="value_mismatch | duplicate | unsupported | range")
+    detail: str = ""
+    values: List[str] = Field(default_factory=list, description="The disagreeing values as strings.")
+    source_ids: List[str] = Field(default_factory=list)
+    severity: str = Field(default="minor", description="major | minor | info")
+
 
 # ---------------------------------------------------------------------------
 # Pillar 1: Function tree
@@ -360,7 +388,11 @@ class CompetitorKnowledge(BaseModel):
     swot: Optional[SWOTAnalysis] = None
 
     sources: List[SourceRef] = Field(default_factory=list)
-    schema_version: str = "1.0.0"
+    conflicts: List[ConflictFlag] = Field(
+        default_factory=list,
+        description="Cross-source disagreements detected for this competitor (see app.consistency).",
+    )
+    schema_version: str = "1.1.0"
 
     def source_count(self) -> int:
         """How many unique sources back this competitor's data."""
@@ -387,3 +419,65 @@ class CompetitorKnowledge(BaseModel):
         for n in self.function_tree.nodes:
             _walk_fn(n)
         return len(seen)
+
+    def all_source_refs(self) -> List[SourceRef]:
+        """Flatten every SourceRef attached anywhere on this competitor."""
+        out: List[SourceRef] = []
+        out.extend(self.sources)
+        out.extend(self.pricing.sources)
+        out.extend(self.user_profile.sources)
+        for tier in self.pricing.tiers + self.pricing.addons:
+            out.extend(tier.sources)
+        for seg in self.user_profile.segments:
+            out.extend(seg.sources)
+            for q in seg.representative_quotes:
+                out.extend(q.sources)
+
+        def _walk_fn(node: FunctionNode) -> None:
+            out.extend(node.sources)
+            for c in node.children:
+                _walk_fn(c)
+
+        for n in self.function_tree.nodes:
+            _walk_fn(n)
+        if self.swot:
+            for bucket in (self.swot.strengths, self.swot.weaknesses,
+                           self.swot.opportunities, self.swot.threats):
+                for item in bucket:
+                    out.extend(item.sources)
+        return out
+
+    def avg_confidence(self) -> float:
+        """Mean confidence across every source backing this competitor.
+
+        Drives the "confidence-aware" orchestration: a competitor whose evidence
+        is, on average, weak becomes a candidate for targeted re-collection.
+        """
+        refs = self.all_source_refs()
+        if not refs:
+            return 0.0
+        return round(sum(r.confidence for r in refs) / len(refs), 3)
+
+    def low_confidence_claims(self, threshold: float) -> List[str]:
+        """Dotted paths of structured claims whose best source is below ``threshold``.
+
+        Used by QC to raise targeted, confidence-driven rework findings.
+        """
+        weak: List[str] = []
+
+        def _check(path: str, refs: List[SourceRef]) -> None:
+            if refs and max(r.confidence for r in refs) < threshold:
+                weak.append(path)
+
+        for i, tier in enumerate(self.pricing.tiers):
+            _check(f"pricing.tiers[{i}]", tier.sources)
+        for i, seg in enumerate(self.user_profile.segments):
+            _check(f"user_profile.segments[{i}]", seg.sources)
+        if self.swot:
+            for label, bucket in (("strengths", self.swot.strengths),
+                                  ("weaknesses", self.swot.weaknesses),
+                                  ("opportunities", self.swot.opportunities),
+                                  ("threats", self.swot.threats)):
+                for j, item in enumerate(bucket):
+                    _check(f"swot.{label}[{j}]", item.sources)
+        return weak

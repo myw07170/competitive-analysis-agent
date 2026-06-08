@@ -128,3 +128,88 @@ export async function getTrace(runId: string): Promise<TraceEvent[]> {
   const j = await r.json();
   return j.events ?? [];
 }
+
+// ---------------------------------------------------------------------------
+// Human-in-the-loop editing
+// ---------------------------------------------------------------------------
+export interface ReportEdit {
+  target_path: string;
+  value: any;
+  note?: string;
+}
+
+export async function patchReport(
+  reportId: string,
+  edits: ReportEdit[],
+): Promise<{ ok: boolean; manual_correction_rate: number; report: any }> {
+  const r = await fetch(`/api/reports/${reportId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ edits }),
+  });
+  if (!r.ok) {
+    const detail = await r.json().catch(() => ({}));
+    throw new Error(detail.detail || `patch failed: ${r.status}`);
+  }
+  return r.json();
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge evolution (cross-run diff)
+// ---------------------------------------------------------------------------
+export interface KnowledgeChange {
+  path: string;
+  change: "added" | "removed" | "changed";
+  before?: string | null;
+  after?: string | null;
+}
+export interface KnowledgeDiff {
+  entity_key: string;
+  name: string;
+  market: string;
+  from_run_id: string;
+  to_run_id: string;
+  from_captured_at?: string | null;
+  to_captured_at?: string | null;
+  changes: KnowledgeChange[];
+  summary: string;
+}
+
+export async function getKnowledgeDiff(market: string, name: string): Promise<KnowledgeDiff | null> {
+  const r = await fetch(`/api/knowledge/diff?market=${encodeURIComponent(market)}&name=${encodeURIComponent(name)}`);
+  if (!r.ok) return null;
+  return r.json();
+}
+
+// ---------------------------------------------------------------------------
+// Agent self-evaluation (meta)
+// ---------------------------------------------------------------------------
+export interface SchemaSuggestion {
+  field: string;
+  action: string;
+  rationale: string;
+  evidence: Record<string, number>;
+  confidence: number;
+}
+export interface MetaReport {
+  n_reports: number;
+  n_competitors: number;
+  field_completeness: Record<string, number>;
+  top_correction_paths: { path: string; count: number }[];
+  top_conflict_paths: { path: string; count: number }[];
+  suggestions: SchemaSuggestion[];
+}
+
+export async function getMetaSuggestions(): Promise<MetaReport> {
+  const r = await fetch(`/api/meta/suggestions`);
+  return r.json();
+}
+
+// ---------------------------------------------------------------------------
+// Resume an interrupted run
+// ---------------------------------------------------------------------------
+export async function resumeRun(runId: string): Promise<StartResponse> {
+  const r = await fetch(`/api/analysis/resume/${runId}`, { method: "POST" });
+  if (!r.ok) throw new Error(`resume failed: ${r.status}`);
+  return r.json();
+}

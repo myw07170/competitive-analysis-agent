@@ -33,3 +33,9 @@ dist/
 backend/data/
 backend/logs/
 frontend/.vite/
+
+# Test / scratch data dirs
+backend/.test-data/
+backend/.smoke-data/
+backend/.demo-data/
+backend/.ci-data/

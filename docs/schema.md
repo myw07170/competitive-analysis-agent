@@ -18,8 +18,13 @@ class CompetitorKnowledge(BaseModel):
     swot: Optional[SWOTAnalysis]           # Added by Analyst
 
     sources: List[SourceRef]               # Top-level provenance
-    schema_version: str = "1.0.0"
+    conflicts: List[ConflictFlag]          # Cross-source disagreements (see §9)
+    schema_version: str = "1.1.0"
 ```
+
+Confidence helpers:
+* `avg_confidence()` — mean confidence across every `SourceRef` on the competitor (drives the `avg_confidence` metric).
+* `low_confidence_claims(threshold)` — dotted paths of structured claims whose best source is below `threshold` (drives confidence-aware rework).
 
 ## 2. Pillar 1 — `FunctionTree`
 
@@ -125,13 +130,15 @@ Used inside SWOT entries and representative quotes — anywhere a single fact ne
 
 ## 7. Versioning
 
-`CompetitorKnowledge.schema_version` is persisted with every saved report. Future schema bumps:
+`CompetitorKnowledge.schema_version` is persisted with every saved report. Current version is **`1.1.0`** (added `conflicts`, confidence helpers, and the report-level credibility/correction metrics). Future schema bumps:
 
 | Bump type | Example | What happens |
 | --- | --- | --- |
-| Patch | "1.0.0" → "1.0.1" | Add an optional field. Old reports remain valid. |
-| Minor | "1.0.0" → "1.1.0" | Add a required field with a default. Old reports auto-migrate. |
-| Major | "1.0.0" → "2.0.0" | Breaking. Bundled with a one-shot migration script in `backend/scripts/`. |
+| Patch | "1.1.0" → "1.1.1" | Add an optional field. Old reports remain valid. |
+| Minor | "1.1.0" → "1.2.0" | Add a field with a default. Old reports auto-migrate (Pydantic defaults). |
+| Major | "1.1.0" → "2.0.0" | Breaking. Bundled with a one-shot migration script in `backend/app/scripts/`. |
+
+The [`MetaEvaluator`](../backend/app/meta.py) proposes data-driven `SchemaSuggestion`s (deprecate / make-optional / tighten-prompt) from historical field completeness — the input to deciding the next bump.
 
 ## 8. Why "function tree + pricing + user profile"?
 
@@ -142,3 +149,54 @@ These three pillars match how product managers actually structure competitive an
 * **User profile** answers *"who already uses it?"* — drives go-to-market strategy.
 
 SWOT, recommendations, and market overview are *derived* from these — see the Writer agent's prompt.
+
+## 9. Credibility & feedback models (v1.1)
+
+Defined in [`schema/competitor.py`](../backend/app/schema/competitor.py) and [`schema/report.py`](../backend/app/schema/report.py).
+
+```python
+class ConflictFlag:               # cross-source disagreement (Innovation-2)
+    field: str                    # e.g. "pricing.tiers[Pro].monthly_price"
+    kind: str                     # value_mismatch | duplicate | unsupported | range
+    detail: str
+    values: List[str]             # the disagreeing values
+    source_ids: List[str]
+    severity: str                 # major | minor | info
+
+class Correction:                 # human-in-the-loop edit (Innovation-5)
+    id: str
+    report_id: str
+    market: str
+    target_path: str              # dotted path that was edited
+    before: str
+    after: str
+    note: str
+    author: str
+    created_at: datetime
+
+class SchemaSuggestion:           # agent self-evaluation (Innovation-4)
+    field: str
+    action: str                   # deprecate | make_optional | tighten_prompt | add_field | split_field
+    rationale: str
+    evidence: Dict[str, float]
+    confidence: float
+
+class KnowledgeDiff:              # cross-run evolution (Innovation-3)
+    entity_key: str
+    name: str
+    market: str
+    changes: List[KnowledgeChange]  # path / change(added|removed|changed) / before / after
+    summary: str
+```
+
+### `ReportMetrics` (extended)
+
+Beyond the original time/token/completeness fields, v1.1 adds:
+
+| Field | Meaning |
+| --- | --- |
+| `avg_confidence` | Mean source confidence across everything shipped. |
+| `low_confidence_claims` | Count of claims below `MIN_CONFIDENCE`. |
+| `conflict_count` | Cross-source disagreements detected. |
+| `manual_correction_rate` | Fraction of structured claims a human edited — the KPI the team drives down. |
+| `corrected_fields` | Absolute count of human edits applied. |
