@@ -50,6 +50,11 @@ LOCALES: Dict[str, Dict[str, str]] = {
         "metrics.avg_sources": "平均来源数 / 竞品",
         "metrics.iterations": "QC 迭代",
         "metrics.rework": "重做次数",
+        "metrics.qc_status": "质控结论",
+        "qc.status.passed": "通过",
+        "qc.status.passed_with_notes": "带备注通过",
+        "qc.status.failed": "未通过",
+        "qc.failed.title": "质量控制未通过",
         "source.confidence": "置信度",
     },
     "en-US": {
@@ -93,6 +98,11 @@ LOCALES: Dict[str, Dict[str, str]] = {
         "metrics.avg_sources": "Avg sources / competitor",
         "metrics.iterations": "QC iterations",
         "metrics.rework": "Rework count",
+        "metrics.qc_status": "QC outcome",
+        "qc.status.passed": "Passed",
+        "qc.status.passed_with_notes": "Passed w/ notes",
+        "qc.status.failed": "Not passed",
+        "qc.failed.title": "Quality control did not pass",
         "source.confidence": "Confidence",
     },
 }

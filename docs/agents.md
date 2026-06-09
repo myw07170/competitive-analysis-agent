@@ -33,7 +33,7 @@ class AgentMessage(BaseModel):
     created_at: datetime
 ```
 
-对于 QC → 上游的反馈闭环，QC 载荷是一个 `QCReport`，其中包含一组 `QCFinding`。每条结论携带 `target_agent`（采集器 / 分析师 / 撰写器）、`target_path`（类 JSONPath）、`severity`、`issue` 和 `suggested_fix`。当 QC 请求返工时，编排器会**为每个接收智能体构建一条带类型的 `AgentMessage(intent="request_rework")`**（[`graph.py:_emit_rework_messages`](../backend/app/orchestration/graph.py)），把它们存入 `GraphState.messages`，并各记一条追踪事件——因此这次结构化交接是可观测的，而不只是一个内部字符串。随后每个接收智能体只用发给它的那部分结论被重新执行（对采集器而言，只针对它标记的那些竞品）。
+对于 QC → 上游的反馈闭环，QC 载荷是一个 `QCReport`，其中包含一组 `QCFinding`。每条结论携带 `target_agent`（采集器 / 分析师 / 撰写器）、`target_path`（类 JSONPath）、`severity`、`issue` 和 `suggested_fix`。当 QC 请求返工时，编排器会**为每个接收智能体构建一条带类型的 `AgentMessage(intent="request_rework")`**（[`graph.py:_emit_rework_messages`](../backend/app/orchestration/graph.py)），把它们存入 `GraphState.messages` 这一结构化消息流——因此这次交接是带类型、可检视的对象，而不只是一个内部字符串。随后每个接收智能体只用发给它的那部分结论被重新执行（对采集器而言，只针对它标记的那些竞品）。
 
 Schema 定义在 [`backend/app/schema/messages.py`](../backend/app/schema/messages.py)。
 

@@ -37,12 +37,13 @@ from ..config import get_settings
 from ..consistency import annotate_conflicts
 from ..market import MarketProfile, get_market
 from ..observability.logger import get_logger
-from ..observability.tracer import Tracer, get_tracer, use_tracer
+from ..observability.tracer import Tracer, use_tracer
 from ..schema import (
     AgentMessage,
     AgentRole,
     CompetitorKnowledge,
     FinalReport,
+    QCFinding,
 )
 from ..schema.report import ReportMetrics
 from ..storage import get_store, normalize_entity_key
@@ -329,14 +330,17 @@ def _make_nodes(market: MarketProfile):
 
 
 def _emit_rework_messages(qc_report) -> List[Dict[str, Any]]:
-    """为每个接收智能体构建一条带类型的 AgentMessage 并记入追踪。"""
+    """为每个接收智能体构建一条带类型的 AgentMessage（结构化的智能体间返工协议）。
+
+    这些消息进入 GraphState 的 ``messages``，承载 QC → 智能体的返工请求；它们
+    *不*作为决策追踪事件发出 —— 追踪面板里只保留 ``qc.review`` 这类智能体调用条目。
+    """
     by_agent: Dict[str, List[Dict[str, Any]]] = {}
     for f in qc_report.findings:
         if f.severity.value in ("blocker", "major"):
             by_agent.setdefault(f.target_agent.value, []).append(f.model_dump(mode="json"))
 
     out: List[Dict[str, Any]] = []
-    tracer = get_tracer()
     for agent_value, findings in by_agent.items():
         try:
             receiver = AgentRole(agent_value)
@@ -349,11 +353,6 @@ def _emit_rework_messages(qc_report) -> List[Dict[str, Any]]:
             payload={"iteration": qc_report.iteration, "findings": findings},
         )
         out.append(msg.model_dump(mode="json"))
-        with tracer.span("qc", "qc.request_rework") as ev:
-            ev.decision = f"request_rework → {receiver.value} ({len(findings)} findings)"
-            ev.response = msg.model_dump_json()
-            ev.extras["protocol"] = "AgentMessage"
-            ev.extras["receiver"] = receiver.value
     return out
 
 
@@ -496,6 +495,21 @@ async def _finalize(final_state: GraphState, tracer: Tracer, market: MarketProfi
 
     qc_history = final_state.get("qc_history", []) or []
     rework_count = sum(1 for q in qc_history if q.get("decision") == "rework")
+
+    # 最终 QC 结论：以最后一轮审查为准。返工预算耗尽后，确定性的阻塞 / 重大
+    # 问题若仍未消除，则判定为"未通过"——并把这些结论带到报告里以呈现原因。
+    last_findings = (qc_history[-1].get("findings", []) if qc_history else []) or []
+    unresolved = [f for f in last_findings if f.get("severity") in ("blocker", "major")]
+    if not qc_history:
+        qc_status = "passed"
+    elif unresolved:
+        qc_status = "failed"
+    elif last_findings:
+        qc_status = "passed_with_notes"
+    else:
+        qc_status = "passed"
+    report.qc_findings = [QCFinding.model_validate(f) for f in last_findings]
+
     completeness_items: List[CompetitorKnowledge] = list(report.competitors)
     if report.target_product is not None:
         completeness_items.append(report.target_product)
@@ -516,6 +530,8 @@ async def _finalize(final_state: GraphState, tracer: Tracer, market: MarketProfi
         avg_sources_per_competitor=round(avg_sources, 2),
         qc_iterations=len(qc_history),
         rework_count=rework_count,
+        qc_status=qc_status,
+        unresolved_findings=len(unresolved),
         avg_confidence=round(avg_conf, 3),
         low_confidence_claims=low_conf,
         conflict_count=conflicts,

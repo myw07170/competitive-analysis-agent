@@ -201,6 +201,8 @@ def _render_metrics(report: FinalReport, loc: dict) -> str:
         (loc.get("metrics.conflicts", "Source conflicts"), f"{m.conflict_count}"),
         (loc.get("metrics.iterations", "QC iterations"), f"{m.qc_iterations}"),
         (loc.get("metrics.rework", "Rework count"), f"{m.rework_count}"),
+        (loc.get("metrics.qc_status", "QC outcome"),
+         loc.get(f"qc.status.{m.qc_status}", m.qc_status)),
         (loc.get("metrics.manual_correction", "Manual-correction rate"),
          f"{m.manual_correction_rate * 100:.0f}%"),
     ]
@@ -209,7 +211,27 @@ def _render_metrics(report: FinalReport, loc: dict) -> str:
         f'<div class="metric-value">{_esc(v)}</div></div>'
         for k, v in cells
     ]
-    return f'<div class="metrics-grid">{"".join(parts)}</div>'
+    grid = f'<div class="metrics-grid">{"".join(parts)}</div>'
+    return grid + _render_qc_failed(report, loc)
+
+
+def _render_qc_failed(report: FinalReport, loc: dict) -> str:
+    """质量控制未通过时，列出残留的阻塞 / 重大问题（导出版的"未通过"说明）。"""
+    if report.metrics.qc_status != "failed":
+        return ""
+    items = [
+        f"<li><b>{_esc(loc.get('qc.severity.' + f.severity.value, f.severity.value))}</b>"
+        f" — <code>{_esc(f.target_path)}</code>: {_esc(f.issue)}</li>"
+        for f in report.qc_findings
+        if f.severity.value in ("blocker", "major")
+    ]
+    title = _esc(loc.get("qc.failed.title", "Quality control did not pass"))
+    body = f"<ul>{''.join(items)}</ul>" if items else ""
+    return (
+        '<div style="margin-top:12px;padding:10px 14px;border:1px solid #fecaca;'
+        'background:#fef2f2;border-radius:8px;color:#9f1239;">'
+        f'<div style="font-weight:600;">⚠ {title}</div>{body}</div>'
+    )
 
 
 def _render_executive(report: FinalReport, source_map: dict, loc: dict) -> str:

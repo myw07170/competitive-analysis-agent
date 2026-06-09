@@ -19,7 +19,16 @@
       "Bash(find . -name \"app.sqlite\" -not -path \"*/.venv/*\")",
       "Bash(python -c ' *)",
       "Bash(python -c \"import compileall,sys; sys.exit\\(0 if compileall.compile_dir\\('app', quiet=1, force=True\\) and compileall.compile_file\\('main.py', quiet=1, force=True\\) else 1\\)\")",
-      "Bash(python -c \"import compileall,sys; sys.exit\\(0 if compileall.compile_dir\\('tests', quiet=1, force=True\\) else 1\\)\")"
+      "Bash(python -c \"import compileall,sys; sys.exit\\(0 if compileall.compile_dir\\('tests', quiet=1, force=True\\) else 1\\)\")",
+      "Bash(find . -path ./node_modules -prune -o -name \"*collector_gather*\" -print)",
+      "Bash(find . -type d -name debug)",
+      "Bash(.venv/Scripts/python.exe \"C:\\\\Users\\\\myw\\\\AppData\\\\Local\\\\Temp\\\\caa-pw\\\\smoke_jsonmode.py\")",
+      "Bash(python -m pytest tests/test_orchestration.py tests/test_routing.py -q)",
+      "Bash(ls -d backend/.venv backend/venv .venv venv)",
+      "Bash(python -c \"import sys; print\\(sys.executable\\)\")",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_orchestration.py tests/test_routing.py -q)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(./.venv/Scripts/python.exe -c ' *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\myw\\AppData\\Local\\Temp\\caa-pw"

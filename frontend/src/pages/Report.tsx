@@ -122,6 +122,7 @@ export default function Report() {
         </p>
 
         <MetricsBar t={t} metrics={report.metrics} />
+        <QcOutcomeBanner t={t} report={report} />
       </div>
 
       <div className="bg-white border rounded-xl print:border-0">
@@ -203,17 +204,63 @@ function MetricsBar({ t, metrics }: { t: (k: string) => string; metrics: any }) 
       (metrics.conflict_count ?? 0) > 0 ? "text-amber-700" : ""],
     [t("metrics.iterations"), metrics.qc_iterations],
     [t("metrics.rework"), metrics.rework_count],
+    [t("metrics.qc_status"), t(`qc.status.${metrics.qc_status ?? "passed"}`),
+      metrics.qc_status === "failed"
+        ? "text-rose-700"
+        : metrics.qc_status === "passed_with_notes"
+          ? "text-amber-700"
+          : "text-emerald-700"],
     [t("metrics.manual_correction"), pct(metrics.manual_correction_rate ?? 0),
       (metrics.manual_correction_rate ?? 0) > 0 ? "text-sky-700" : ""],
   ];
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2">
+    <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-11 gap-2">
       {cells.map(([k, v, cls]) => (
         <div key={k} className="border rounded px-3 py-2">
           <div className="text-[10px] uppercase tracking-wide text-slate-500">{k}</div>
           <div className={"text-sm font-semibold " + (cls || "")}>{v}</div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * 质量控制"未通过"横幅。当返工预算耗尽后仍残留阻塞 / 重大问题时，
+ * QC 被强制结束但并未真正通过 —— 这里把该结论与未解决的问题清单显式呈现，
+ * 而不是让报告看起来"一切正常"。仅在 failed 时显示。
+ */
+function QcOutcomeBanner({ t, report }: { t: (k: string, vars?: Record<string, string | number>) => string; report: any }) {
+  const m = report?.metrics;
+  if (!m || m.qc_status !== "failed") return null;
+  const findings = (report.qc_findings || []).filter(
+    (f: any) => f.severity === "blocker" || f.severity === "major",
+  );
+  return (
+    <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3">
+      <div className="flex items-center gap-2">
+        <span className="text-rose-600">⚠</span>
+        <span className="font-semibold text-sm text-rose-800">{t("qc.failed.title")}</span>
+      </div>
+      <p className="text-xs text-rose-700 mt-1">
+        {t("qc.failed.desc", { rework: m.rework_count ?? 0, count: m.unresolved_findings ?? findings.length })}
+      </p>
+      {findings.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {findings.map((f: any, i: number) => (
+            <li key={f.id || i} className="text-xs text-rose-800 flex gap-2">
+              <span className="shrink-0 font-medium px-1.5 py-0.5 rounded bg-rose-100 border border-rose-200">
+                {t(`qc.severity.${f.severity}`)}
+              </span>
+              <span className="min-w-0">
+                <span className="font-mono text-[11px] text-rose-600">{f.target_path}</span>
+                {" — "}
+                {f.issue}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

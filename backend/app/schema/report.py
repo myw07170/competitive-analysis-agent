@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
 from .competitor import CompetitorKnowledge, SourceRef
+from .messages import QCFinding
 
 
 class ReportSection(BaseModel):
@@ -80,6 +81,17 @@ class ReportMetrics(BaseModel):
     avg_sources_per_competitor: float = 0.0
     qc_iterations: int = 0
     rework_count: int = 0
+    # --- 质量控制最终结论 ---
+    qc_status: Literal["passed", "passed_with_notes", "failed"] = Field(
+        default="passed",
+        description="Final QC outcome. 'failed' means blocker/major findings remained "
+                    "unresolved after the rework budget was exhausted; "
+                    "'passed_with_notes' means only minor/info findings remained.",
+    )
+    unresolved_findings: int = Field(
+        default=0,
+        description="Count of blocker/major QC findings still open in the final review.",
+    )
     # --- 可信度 / 置信度 ---
     avg_confidence: float = Field(
         default=0.0, ge=0.0, le=1.0,
@@ -178,6 +190,10 @@ class FinalReport(BaseModel):
 
     metrics: ReportMetrics = Field(default_factory=ReportMetrics)
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    # 最终一轮 QC 审查的结论 —— 当质量控制最终未通过（返工预算耗尽仍有
+    # 阻塞 / 重大问题）时，前端据此呈现"未通过"的原因。
+    qc_findings: List[QCFinding] = Field(default_factory=list)
 
     # 报告中用到的所有来源 —— 为引用面板扁平化。
     all_sources: List[SourceRef] = Field(default_factory=list)

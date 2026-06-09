@@ -73,9 +73,9 @@
                                  └──────────────┘
 ```
 
-* 循环上限：`MAX_QC_ITERATIONS`（默认 `2`）。超过后，运行以 QC 当时给出的结论收尾。
+* 循环上限：`MAX_QC_ITERATIONS`（默认 `2`）。超过后，运行以 QC 当时给出的结论收尾；若返工预算耗尽仍残留阻塞 / 重大问题，最终结论记为"未通过"（`metrics.qc_status="failed"`），并连同未解决的问题清单（`report.qc_findings`）一起呈现在结果页，而非伪装成"一切正常"。
 * **按角色定向的路由**（[`_route_after_qc`](../backend/app/orchestration/graph.py)）：QC 产出带 `target_agent`（采集器 / 分析师 / 撰写器）标签的结论。运行会从*拥有阻塞 / 重大问题的最早阶段*重新进入——缺失 SWOT 会重跑 `analyze`，引用断链会重跑 `write`，来源覆盖不足会重跑 `collect`。它**不会**盲目地从 `collect` 重启。
-* **定向返工**：采集器返工时，只重新采集被 QC 标记的竞品（其余沿用），并且每个竞品的 `gather` 调用只收到 `target_path` 指向它的那些结论。QC → 智能体的交接是一个带类型的 `AgentMessage(intent="request_rework")`，并记入追踪。
+* **定向返工**：采集器返工时，只重新采集被 QC 标记的竞品（其余沿用），并且每个竞品的 `gather` 调用只收到 `target_path` 指向它的那些结论。QC → 智能体的交接是一个带类型的 `AgentMessage(intent="request_rework")`，写入结构化消息流（`GraphState.messages`）。
 * **置信度感知**：仅由低置信度来源（低于 `MIN_CONFIDENCE`）支撑的断言本身也会被标记，因此循环追求的是更强的证据，而不只是补齐缺失字段。
 * mock 后端在返工那一遍会返回明显更丰富的载荷，使循环在无 Key 的演示中也能*可度量地*改善（更多来源、更少 schema 缺口）；在实跑模式下，确定性检查（来源数量、空字段、冲突、低置信度）为循环提供了客观的改进判据。
 
@@ -133,7 +133,7 @@
 | --- | --- | --- |
 | 清晰的角色分工 | [`backend/app/agents/`](../backend/app/agents/) | 四个智能体文件；`BaseAgent` 是唯一共享逻辑。 |
 | 可视化 DAG | [`backend/app/orchestration/state.py`](../backend/app/orchestration/state.py) + [`frontend/src/components/DAGFlow.tsx`](../frontend/src/components/DAGFlow.tsx) | 静态 DAG 元数据由 `/api/analysis/dag` 提供，经 ReactFlow 渲染。 |
-| 结构化（类函数调用风格）的消息传递 | [`backend/app/schema/messages.py`](../backend/app/schema/messages.py) + 在每个边界上做 Pydantic 校验；`AgentMessage` 现在承载 QC → 智能体的返工请求（[`graph.py:_emit_rework_messages`](../backend/app/orchestration/graph.py)） | 智能体间载荷是带类型的对象，绝非裸文本；返工以带类型的 `AgentMessage(intent="request_rework")` 派发并记入追踪。 |
+| 结构化（类函数调用风格）的消息传递 | [`backend/app/schema/messages.py`](../backend/app/schema/messages.py) + 在每个边界上做 Pydantic 校验；`AgentMessage` 现在承载 QC → 智能体的返工请求（[`graph.py:_emit_rework_messages`](../backend/app/orchestration/graph.py)） | 智能体间载荷是带类型的对象，绝非裸文本；返工以带类型的 `AgentMessage(intent="request_rework")` 派发，写入结构化消息流（`GraphState.messages`）。 |
 | 真实、按角色定向的反馈闭环 | [`backend/app/orchestration/graph.py:_route_after_qc`](../backend/app/orchestration/graph.py)；QC 同时审查知识**与**报告（[`agents/qc.py`](../backend/app/agents/qc.py)） | QC 结论路由到采集器、分析师**或**撰写器；只重新采集被标记的竞品，每个竞品携带各自的结论切片。mock 后端在返工那一遍返回明显更丰富的数据。 |
 | Schema 一致性 | [`backend/app/schema/competitor.py`](../backend/app/schema/competitor.py) | 对每个智能体输出都调用 Pydantic 的 `CompetitorKnowledge.model_validate`。 |
 | 来源可溯源 | `SourceRef` 是每个携带事实的 schema 节点的必填字段。前端渲染 `SourceBadge`。 | 每个 Cited / SourceRef 都有 kind、可选 URL、片段、置信度。 |

@@ -66,6 +66,7 @@ export const zh: Record<string, string> = {
   "metrics.avg_sources": "平均来源数 / 竞品",
   "metrics.iterations": "QC 迭代",
   "metrics.rework": "重做次数",
+  "metrics.qc_status": "质控结论",
   "metrics.confidence": "平均置信度",
   "metrics.conflicts": "来源分歧数",
   "metrics.manual_correction": "人工修正率",
@@ -140,5 +141,10 @@ export const zh: Record<string, string> = {
   "qc.decision.approve": "通过",
   "qc.decision.approve_with_notes": "带备注通过",
   "qc.decision.rework": "退回重做",
+  "qc.status.passed": "通过",
+  "qc.status.passed_with_notes": "带备注通过",
+  "qc.status.failed": "未通过",
+  "qc.failed.title": "质量控制未通过",
+  "qc.failed.desc": "经过 {rework} 次返工后，仍有 {count} 个阻塞 / 严重问题未解决；已达返工上限，强制结束。以下问题未通过质控:",
   "mock.banner": "演示模式:未配置 Volcengine API Key,以下输出为内置模拟数据。",
 };

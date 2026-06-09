@@ -66,6 +66,7 @@ export const en: Record<string, string> = {
   "metrics.avg_sources": "Avg sources / competitor",
   "metrics.iterations": "QC iterations",
   "metrics.rework": "Rework count",
+  "metrics.qc_status": "QC outcome",
   "metrics.confidence": "Avg confidence",
   "metrics.conflicts": "Source conflicts",
   "metrics.manual_correction": "Manual-correction rate",
@@ -140,5 +141,10 @@ export const en: Record<string, string> = {
   "qc.decision.approve": "Approve",
   "qc.decision.approve_with_notes": "Approve w/ notes",
   "qc.decision.rework": "Rework",
+  "qc.status.passed": "Passed",
+  "qc.status.passed_with_notes": "Passed w/ notes",
+  "qc.status.failed": "Not passed",
+  "qc.failed.title": "Quality control did not pass",
+  "qc.failed.desc": "After {rework} rework round(s), {count} blocker/major issue(s) remain unresolved; the rework limit was reached and the run was finished anyway. The following issues did not pass QC:",
   "mock.banner": "Mock mode: no Volcengine API key configured — outputs below are built-in demo data.",
 };
