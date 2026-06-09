@@ -1,4 +1,4 @@
-"""Active-learning loop (Innovation-5): corrections become agent guidance."""
+"""主动学习闭环（创新点 5）：修正转化为对智能体的引导。"""
 from __future__ import annotations
 
 from app.learning import invalidate_cache, recent_guidance

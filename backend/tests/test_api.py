@@ -1,7 +1,7 @@
-"""End-to-end API tests over the ASGI app (mock mode).
+"""基于 ASGI 应用的端到端 API 测试（mock 模式）。
 
-Exercises the full surface the frontend uses: start → poll → report → human
-edit (PATCH) → knowledge diff → meta suggestions → resume guard.
+覆盖前端所用的完整接口：start → 轮询 → report → 人工编辑（PATCH）
+→ 知识 diff → meta 建议 → 续跑守卫。
 """
 from __future__ import annotations
 
@@ -41,11 +41,11 @@ async def test_full_run_edit_and_metrics():
         report_id = await _run_to_completion(ac)
         rep = (await ac.get(f"/api/reports/{report_id}")).json()
         assert rep["competitors"]
-        # New credibility metrics are present.
+        # 新的可信度指标已存在。
         for k in ("avg_confidence", "conflict_count", "manual_correction_rate"):
             assert k in rep["metrics"]
 
-        # Human-in-the-loop edit.
+        # 人在回路编辑。
         pr = await ac.patch(f"/api/reports/{report_id}", json={
             "edits": [{"target_path": "competitors[0].market_position",
                        "value": "EDITED position", "note": "fix"}],
@@ -59,7 +59,7 @@ async def test_full_run_edit_and_metrics():
         assert rep2["metrics"]["manual_correction_rate"] > 0
         assert len(rep2["corrections"]) >= 1
 
-        # Bad path is rejected.
+        # 非法路径被拒绝。
         bad = await ac.patch(f"/api/reports/{report_id}", json={
             "edits": [{"target_path": "missing[9].x", "value": "y"}]})
         assert bad.status_code == 400

@@ -1,11 +1,11 @@
-"""One-shot CLI demo of the full pipeline.
+"""完整流水线的一键 CLI 演示。
 
-Usage:
+用法：
     python -m app.scripts.demo --product "Notion" --market us
     python -m app.scripts.demo --product "飞书" --market cn --json
 """
-# NOTE: deliberately no `from __future__ import annotations` — it stringifies
-# annotations and breaks Typer's option type introspection.
+# 注意：刻意不写 `from __future__ import annotations` —— 它会把注解字符串化，
+# 从而破坏 Typer 对选项类型的内省。
 import asyncio
 import json
 
@@ -40,7 +40,7 @@ def main(
         console.print_json(report.model_dump_json(indent=2))
         return
 
-    # Pretty summary
+    # 美化的摘要
     console.print(Panel.fit(
         f"[bold]{report.title}[/]\n"
         f"product: {report.product}    market: {report.market}    locale: {report.locale}\n"

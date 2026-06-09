@@ -11,7 +11,7 @@ const BUNDLES: Record<Locale, Record<string, string>> = {
 export function marketToLocale(market: string): Locale {
   if (market === "cn") return "zh-CN";
   if (market === "us") return "en-US";
-  // Extension point: future markets register their default locale here.
+  // 扩展点：未来的市场在此注册其默认 locale。
   return "en-US";
 }
 

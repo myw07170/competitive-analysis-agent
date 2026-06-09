@@ -1,8 +1,7 @@
-"""QC agent deterministic-checks tests.
+"""QC 智能体确定性检查测试。
 
-We exercise the deterministic path directly (no LLM needed). This validates the
-part of QC that the rubric considers "real" feedback — including the role-routed
-collector / analyst / writer checks.
+我们直接走确定性路径（无需 LLM）。这验证了评分细则视为"真实"反馈的那部分 QC ——
+包括按角色路由的采集器 / 分析师 / 撰写器检查。
 """
 from __future__ import annotations
 
@@ -63,7 +62,7 @@ def test_placeholder_url_detection():
 
 def test_full_competitor_passes():
     findings = _collector(_full_competitor(), get_settings().min_sources_per_competitor)
-    # Should be 0 deterministic collector findings on a fully-populated competitor.
+    # 对一个完全填充的竞品，确定性的采集器结论应为 0 条。
     assert findings == []
 
 
@@ -95,7 +94,7 @@ def test_empty_function_tree_is_blocker():
 
 def test_missing_swot_routes_to_analyst():
     qc = QCAgent(get_market("us"))
-    c = _full_competitor()  # no swot set
+    c = _full_competitor()  # 未设置 swot
     findings = qc._analyst_checks(_labelled(c))
     assert any(f.target_agent == AgentRole.ANALYST and f.severity == Severity.MAJOR
                and "swot" in f.target_path for f in findings)

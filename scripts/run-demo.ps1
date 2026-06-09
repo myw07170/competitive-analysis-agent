@@ -1,5 +1,5 @@
-# Run the one-shot CLI demo (no UI).
-# Usage:  .\scripts\run-demo.ps1 -Product "Notion" -Market us
+# 运行一键 CLI 演示（无界面）。
+# 用法：  .\scripts\run-demo.ps1 -Product "Notion" -Market us
 
 param(
     [Parameter(Mandatory=$true)][string]$Product,

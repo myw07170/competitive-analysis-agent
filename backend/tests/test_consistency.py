@@ -1,4 +1,4 @@
-"""Cross-source conflict detection + self-consistency voting (Innovation-2)."""
+"""跨来源冲突检测 + 自一致性投票（创新点 2）。"""
 from __future__ import annotations
 
 from app.consistency import detect_conflicts, majority_vote
@@ -59,4 +59,4 @@ def test_majority_vote_single_sample_passthrough():
 def test_majority_vote_keeps_consensus():
     samples = [["A", "B", "C"], ["A", "B", "X"], ["A", "B", "Y"]]
     voted = majority_vote(samples, keep=4)
-    assert voted == ["A", "B"]  # only A and B appear in a majority of samples
+    assert voted == ["A", "B"]  # 只有 A 和 B 出现在多数样本中

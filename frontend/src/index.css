@@ -7,11 +7,10 @@
     "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
 
   /* ───────────────────────────────────────────────────────────────────────
-     PAGE WIDTH KNOB — the single value that controls how wide the centered
-     page column is. It governs, and keeps aligned, the top header bar
-     (App.tsx), the page titles, and the flow card (Home.tsx). Raise it for a
-     wider layout (e.g. 88rem ≈ 1408px) or lower it for a narrower one.
-     80rem ≈ 1280px (matches Tailwind's max-w-7xl).                          */
+     页面宽度旋钮 —— 控制居中页面列宽度的唯一取值。它统管并对齐顶部页眉栏
+     （App.tsx）、页面标题以及流程卡片（Home.tsx）。调大可获得更宽的布局
+     （例如 88rem ≈ 1408px），调小则更窄。
+     80rem ≈ 1280px（与 Tailwind 的 max-w-7xl 一致）。                        */
   --page-max-width: 68rem;
 }
 
@@ -32,7 +31,7 @@ body {
 .cite-ref { @apply text-[10px] mx-0.5 align-super; }
 .cite-ref a { @apply no-underline; }
 
-/* Print / Save-as-PDF — keep colours, hide nav, expand all tabs. */
+/* 打印 / 另存为 PDF —— 保留颜色、隐藏导航、展开所有标签页。 */
 @media print {
   @page { size: A4; margin: 14mm; }
   body { background: #fff !important; }

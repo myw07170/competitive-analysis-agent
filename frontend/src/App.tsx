@@ -8,15 +8,14 @@ import { makeT, marketToLocale } from "./i18n";
 
 export default function App() {
   const [health, setHealth] = useState<HealthInfo | null>(null);
-  // The selected target market lives at the top level so the header language
-  // can follow it: Chinese by default, switching to English only when the US
-  // market is picked on the setup page.
+  // 选中的目标市场保存在顶层，使顶栏语言能随之变化：默认中文，
+  // 仅当在设置页选择美国市场时才切换为英文。
   const [market, setMarket] = useState("cn");
   const t = useMemo(() => makeT(marketToLocale(market)), [market]);
 
-  // On the analysis page ("/") a run may be in progress, so "历史报告" opens a
-  // new tab to preserve it; elsewhere (e.g. viewing a saved report) it just
-  // navigates the current tab. "新建分析" always opens a new tab.
+  // 在分析页（"/"）上可能有运行正在进行，因此"历史报告"会打开一个新标签页
+  // 以保留它；在其他位置（例如查看已保存的报告）则只在当前标签页内导航。
+  // "新建分析"总是打开一个新标签页。
   const { pathname } = useLocation();
   const historyOpensNewTab = pathname === "/";
 
@@ -31,7 +30,7 @@ export default function App() {
             <span className="font-semibold text-lg">{t("app.header")}</span>
           </Link>
           <nav className="flex items-center gap-4 text-sm">
-            {/* New analysis always opens a new tab so the current run is kept. */}
+            {/* 新建分析总是打开新标签页，以保留当前运行。 */}
             <Link to="/" target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-brand-600">{t("nav.new")}</Link>
             <Link
               to="/history"

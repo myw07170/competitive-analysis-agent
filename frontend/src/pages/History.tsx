@@ -4,14 +4,14 @@ import { MetaReport, deleteReport, getMetaSuggestions, listReports } from "../ap
 import { makeT, marketToLocale } from "../i18n";
 
 interface HistoryProps {
-  // Drives the page language (Chinese by default; English for the US market).
+  // 驱动页面语言（默认中文；美国市场为英文）。
   market: string;
 }
 
 export default function History({ market }: HistoryProps) {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  // The row pending deletion — non-null shows the confirm modal.
+  // 待删除的行 —— 非空时显示确认弹窗。
   const [pendingDelete, setPendingDelete] = useState<any | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -54,7 +54,7 @@ export default function History({ market }: HistoryProps) {
             <span className="text-xs text-slate-500 ml-auto">
               {new Date(r.generated_at).toLocaleString()}
             </span>
-            {/* Hover-revealed actions. */}
+            {/* 悬停时显现的操作。 */}
             <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
               <Link
                 to={`/report/${r.id}`}
@@ -74,7 +74,7 @@ export default function History({ market }: HistoryProps) {
         ))}
       </div>
 
-      {/* Confirm-delete modal. */}
+      {/* 删除确认弹窗。 */}
       {pendingDelete && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
@@ -113,7 +113,7 @@ export default function History({ market }: HistoryProps) {
   );
 }
 
-/** Agent self-evaluation: field completeness + schema-evolution suggestions. */
+/** 智能体自评：字段完整度 + schema 演进建议。 */
 function MetaPanel({ t }: { t: (k: string, v?: Record<string, string | number>) => string }) {
   const [meta, setMeta] = useState<MetaReport | null>(null);
   const [open, setOpen] = useState(false);

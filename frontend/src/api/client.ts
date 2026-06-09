@@ -1,5 +1,5 @@
-// Thin client over the backend REST + SSE API.
-// All paths are proxied through Vite (see vite.config.ts) so we can use relative URLs.
+// 对后端 REST + SSE API 的轻量客户端。
+// 所有路径都经由 Vite 代理（见 vite.config.ts），因此可以使用相对 URL。
 
 export interface MarketInfo {
   code: string;
@@ -124,13 +124,13 @@ export async function deleteReport(reportId: string): Promise<void> {
 
 export async function getTrace(runId: string): Promise<TraceEvent[]> {
   const r = await fetch(`/api/traces/${runId}`);
-  if (!r.ok) return []; // 404 = no trace recorded for this run
+  if (!r.ok) return []; // 404 = 该运行没有记录追踪
   const j = await r.json();
   return j.events ?? [];
 }
 
 // ---------------------------------------------------------------------------
-// Human-in-the-loop editing
+// 人在回路编辑
 // ---------------------------------------------------------------------------
 export interface ReportEdit {
   target_path: string;
@@ -155,7 +155,7 @@ export async function patchReport(
 }
 
 // ---------------------------------------------------------------------------
-// Knowledge evolution (cross-run diff)
+// 知识演化（跨运行 diff）
 // ---------------------------------------------------------------------------
 export interface KnowledgeChange {
   path: string;
@@ -182,7 +182,7 @@ export async function getKnowledgeDiff(market: string, name: string): Promise<Kn
 }
 
 // ---------------------------------------------------------------------------
-// Agent self-evaluation (meta)
+// 智能体自评（meta）
 // ---------------------------------------------------------------------------
 export interface SchemaSuggestion {
   field: string;
@@ -206,7 +206,7 @@ export async function getMetaSuggestions(): Promise<MetaReport> {
 }
 
 // ---------------------------------------------------------------------------
-// Resume an interrupted run
+// 恢复一次被中断的运行
 // ---------------------------------------------------------------------------
 export async function resumeRun(runId: string): Promise<StartResponse> {
   const r = await fetch(`/api/analysis/resume/${runId}`, { method: "POST" });

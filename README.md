@@ -11,7 +11,7 @@
 
 ## 1. 项目简介
 
-给定一个产品名称和一个目标市场（🇨🇳 中国 / 🇺🇸 美国），系统会启动一支由多个专职智能体组成的"数字调研团队"，它们协作完成以下工作：
+给定一个产品名称和一个目标市场（🇨🇳 中国 / 🇺🇸 美国），系统会启动一支由多个专职智能体组成的“数字调研团队”，它们协作完成以下工作：
 
 1. **采集（Collect）** 竞品的公开信息（网络搜索、遵循 robots.txt 的网页抓取、问卷式综合、模拟用户访谈）。
 2. **结构化（Structure）** 把信息对齐到一套严格的竞品知识 **Schema**（功能树、定价模型、用户画像）。
@@ -21,35 +21,11 @@
 
 每一条结论都**可溯源**（URL / 文档 / 访谈 ID）并附带置信度分数，每一个智能体决策都可通过结构化日志和追踪记录被**观测**。审阅者可以**就地编辑任意字段**（人在回路 / human-in-the-loop），而这些编辑会进入一个**主动学习闭环**，对后续运行产生引导。
 
----
-
-## 2. 对照评分维度的亮点
-
-| 评分维度 | 本项目如何应对 |
-| --- | --- |
-| **多智能体协作与可信度（35%）** | 四个职责互不重叠的专职智能体；带可视化的 LangGraph DAG；**结构化的智能体间协议**——每一次交接都是一个经校验的 Pydantic 对象（`CompetitorKnowledge`、`QCReport`），QC 返工以带类型的 `AgentMessage(intent="request_rework")` 形式派发并记入追踪；**真实、按角色定向的反馈闭环**——QC 同时审查采集到的知识*与最终报告*，再把返工路由到拥有该缺陷的智能体（采集 / 分析 / 撰写），并只重新采集被标记的竞品；严格的 schema 校验；每条事实都携带带置信度的 `SourceRef`。 |
-| **技术深度与工程能力（25%）** | 端到端技术栈（采集 → 编排 → 知识存储 → API → 前端）；每个智能体的追踪记录含 prompt / 输入 / 输出 / token；**置信度感知的编排**、**跨来源冲突检测**、自一致性投票、引用强制校验；每个竞品并发采集；**DAG 检查点 + 断点续跑**；外置的运行注册表；重试 / 超时 / 兜底封装；用于稳定演示的 mock 模式。 |
-| **业务价值与用户体验（20%）** | 贴合真实工作流（输入 → DAG 进度 → 报告 → 追踪 → **人在回路编辑** → 回放）；可量化指标（耗时、来源覆盖率、schema 完整度、平均置信度、冲突数、**人工修正率**）记录于 `metrics`；**跨运行的知识演化**（对比同一竞品在不同运行间的变化）；**智能体自评**并提出 schema 变更建议；市场可插拔架构（今天支持 CN / US，可扩展至任意市场）。 |
-| **代码质量与文档（10%）** | 模块化布局、带类型注解的 Python、完整记录的智能体协议、架构图、部署指南、扩展指南；后端 `pytest` 测试套件 + 前端类型检查 / 构建均在 **CI** 中运行（`.github/workflows/ci.yml`）。 |
-| **合规与材料（10%）** | 每次抓取都有 `robots.txt` 守卫，采集器遵守 ToS，纯合成的访谈 / 问卷数据均明确标注（真实数据导入 + 强制 PII 脱敏环节**作为 v1.1 计划项**列出，见 [`docs/compliance.md`](docs/compliance.md) §4）；声明使用的 LLM（火山方舟 Volcengine Ark）与搜索服务商；完整的提交材料（方案、视频脚本、代码仓库）。 |
+**技术栈一览：** 后端 FastAPI + LangGraph + Pydantic + SQLite，LLM 由火山方舟（Volcengine Ark）提供；前端 React 18 + Vite + TypeScript + Tailwind。无 API Key 时可一键进入 **mock 模式**离线体验完整流程。
 
 ---
 
-## 2.1 已实现能力（v1.1）
-
-在基础流水线之上，系统还实现了：
-
-- **按角色定向的反馈闭环**——`qc` 会根据哪个智能体对阻塞性问题负责，把返工路由回 `collect`、`analyze` **或** `write`（[`orchestration/graph.py:_route_after_qc`](backend/app/orchestration/graph.py)）。只重新采集被标记的竞品（"定向返工"），且每个智能体只收到发给它的那部分 QC 结论，以带类型的 `AgentMessage` 承载。
-- **置信度感知的编排**——每条断言汇总其来源的置信度；证据薄弱的断言成为重新采集的候选项。以 `avg_confidence` / `low_confidence_claims` 指标呈现。
-- **自一致性 + 跨来源冲突检测**——竞品识别可在 N 个样本间做多数投票；定价 / 币种 / 能力上的矛盾会被标记为 `ConflictFlag` 并渲染成"⚠ 来源冲突"徽标（[`consistency.py`](backend/app/consistency.py)）。
-- **人在回路编辑**——`PATCH /api/reports/{id}` 应用字段编辑，记录一条 `Correction` 审计轨迹，并重新计算**人工修正率** KPI。
-- **主动学习**——把近期的修正提炼为"经验教训"，注入采集器 / 撰写器的 prompt（[`learning.py`](backend/app/learning.py)）。
-- **跨运行的知识演化**——每次运行都按归一化的实体键给每个竞品打快照；`GET /api/knowledge/diff` 展示自上次以来发生的变化（[`knowledge.py`](backend/app/knowledge.py)）。
-- **智能体自评 / 动态 schema**——`GET /api/meta/suggestions` 把字段完整度 + 反复出现的修正 / 冲突汇总为 schema 演进建议（[`meta.py`](backend/app/meta.py)）。
-- **DAG 检查点 + 续跑**——每个节点都对 `GraphState` 打检查点；被中断的运行可通过 `POST /api/analysis/resume/{run_id}` 从最近完成的阶段恢复。
-- **并发 + 持久化**——每个竞品的采集 / 分析并发执行（受限信号量约束）；运行注册表被持久化，因此状态 / 追踪能在重启后存活。
-
-## 3. 架构总览
+## 2. 架构总览
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
@@ -85,6 +61,22 @@
 
 ---
 
+## 3. 核心能力
+
+在基础流水线之上，系统还实现了：
+
+- **按角色定向的反馈闭环**——`qc` 会根据哪个智能体对阻塞性问题负责，把返工路由回 `collect`、`analyze` **或** `write`（[`orchestration/graph.py:_route_after_qc`](backend/app/orchestration/graph.py)）。只重新采集被标记的竞品（“定向返工”），且每个智能体只收到发给它的那部分 QC 结论，以带类型的 `AgentMessage` 承载。
+- **置信度感知的编排**——每条断言汇总其来源的置信度；证据薄弱的断言成为重新采集的候选项。以 `avg_confidence` / `low_confidence_claims` 指标呈现。
+- **自一致性 + 跨来源冲突检测**——竞品识别可在 N 个样本间做多数投票；定价 / 币种 / 能力上的矛盾会被标记为 `ConflictFlag` 并渲染成“⚠ 来源冲突”徽标（[`consistency.py`](backend/app/consistency.py)）。
+- **人在回路编辑**——`PATCH /api/reports/{id}` 应用字段编辑，记录一条 `Correction` 审计轨迹，并重新计算**人工修正率** KPI。
+- **主动学习**——把近期的修正提炼为“经验教训”，注入采集器 / 撰写器的 prompt（[`learning.py`](backend/app/learning.py)）。
+- **跨运行的知识演化**——每次运行都按归一化的实体键给每个竞品打快照；`GET /api/knowledge/diff` 展示自上次以来发生的变化（[`knowledge.py`](backend/app/knowledge.py)）。
+- **智能体自评 / 动态 schema**——`GET /api/meta/suggestions` 把字段完整度 + 反复出现的修正 / 冲突汇总为 schema 演进建议（[`meta.py`](backend/app/meta.py)）。
+- **DAG 检查点 + 续跑**——每个节点都对 `GraphState` 打检查点；被中断的运行可通过 `POST /api/analysis/resume/{run_id}` 从最近完成的阶段恢复。
+- **并发 + 持久化**——每个竞品的采集 / 分析并发执行（受限信号量约束）；运行注册表被持久化，因此状态 / 追踪能在重启后存活。
+
+---
+
 ## 4. 依赖环境
 
 - Python **3.10+**
@@ -97,7 +89,16 @@
 
 ## 5. 启动步骤
 
-### 5.1 后端
+### 5.1 一键脚本（推荐，Windows / PowerShell）
+
+仓库根目录的 `scripts/` 下提供了幂等的启动脚本，自动完成建虚拟环境、装依赖、拷贝 `.env` 等步骤。在**两个**终端中分别运行：
+
+```powershell
+.\scripts\start-backend.ps1     # 建 venv、装依赖、拷贝 .env，在 http://127.0.0.1:8000 启动后端
+.\scripts\start-frontend.ps1    # 装 node 依赖，在 http://127.0.0.1:5173 启动前端
+```
+
+### 5.2 手动启动 · 后端
 
 ```powershell
 cd backend
@@ -112,7 +113,7 @@ notepad .env       # 设置 ARK_API_KEY 与 ARK_MODEL_ID，或保持 VOLC_MOCK=1
 python main.py     # 在 http://127.0.0.1:8000 启动 FastAPI
 ```
 
-### 5.2 前端
+### 5.3 手动启动 · 前端
 
 ```powershell
 cd frontend
@@ -120,11 +121,15 @@ pnpm install
 pnpm dev           # 在 http://127.0.0.1:5173 启动 Vite
 ```
 
-打开 `http://127.0.0.1:5173`，选择 **🇨🇳 中国市场** 或 **🇺🇸 美国市场**，输入一个产品（例如 "Notion" 或 "飞书"），即可看到 DAG 逐节点点亮。
+打开 `http://127.0.0.1:5173`，选择 **🇨🇳 中国市场** 或 **🇺🇸 美国市场**，输入一个产品（例如 “Notion” 或 “飞书”），即可看到 DAG 逐节点点亮。
 
-### 5.3 一键演示（无界面）
+### 5.4 一键演示（无界面）
 
 ```powershell
+# 通过脚本
+.\scripts\run-demo.ps1 -Product "Notion" -Market us
+
+# 或直接调用模块
 cd backend
 python -m app.scripts.demo --product "Notion" --market us
 ```
@@ -166,8 +171,9 @@ python -m app.scripts.demo --product "Notion" --market us
 competitive-analysis-agent/
 ├── README.md                       # ← 你正在看的文件
 ├── docs/                           # 架构、智能体、schema、部署、扩展等文档
+├── scripts/                        # 便捷启动脚本（start-backend / start-frontend / run-demo）
 ├── backend/                        # FastAPI + LangGraph 智能体系统
-│   ├── main.py
+│   ├── main.py                     # 后端入口
 │   ├── requirements.txt
 │   ├── .env.example
 │   └── app/
@@ -175,20 +181,24 @@ competitive-analysis-agent/
 │       ├── agents/                 # 采集器 / 分析师 / 撰写器 / QC
 │       ├── orchestration/          # LangGraph DAG + 状态机
 │       ├── schema/                 # Pydantic schema（竞品 / 消息 / 报告）
-│       ├── llm/                    # 火山方舟 Ark 客户端
+│       ├── llm/                    # 火山方舟 Ark 客户端 + mock
 │       ├── collectors/             # 网络搜索 + 遵循 robots.txt 的抓取器
 │       ├── market/                 # 市场画像（CN / US，可插拔）
 │       ├── i18n/                   # 服务端多语言文案
 │       ├── observability/          # 结构化日志 + 追踪存储
 │       ├── storage/                # SQLite 知识存储
-│       └── prompts/                # 按智能体、按语言的系统 prompt
+│       ├── prompts/                # 按智能体、按语言的系统 prompt
+│       ├── scripts/                # CLI 演示脚本
+│       ├── consistency.py          # 自一致性投票 + 冲突检测
+│       ├── knowledge.py            # 跨运行知识演化 / diff
+│       ├── learning.py             # 主动学习闭环
+│       └── meta.py                 # 智能体自评 / schema 建议
 ├── frontend/                       # React 18 + Vite + TS + Tailwind
 │   └── src/
 │       ├── pages/
 │       ├── components/             # DAGFlow、ReportView、TraceViewer、SourceBadge
 │       ├── api/
 │       └── i18n/                   # zh / en 文案包
-└── scripts/                        # 便捷启动脚本
 ```
 
 完整的逐文件说明见 [`docs/project-structure.md`](docs/project-structure.md)。

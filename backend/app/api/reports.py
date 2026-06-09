@@ -1,4 +1,4 @@
-"""Report read + human-in-the-loop edit endpoints."""
+"""报告读取 + 人在回路编辑端点。"""
 from __future__ import annotations
 
 import re
@@ -35,7 +35,7 @@ async def get_report(report_id: str):
 
 @router.delete("/{report_id}")
 async def delete_report(report_id: str):
-    """Delete a report and all of its associated records (including its trace)."""
+    """删除一份报告及其所有关联记录（包括其追踪）。"""
     store = get_store()
     await store.init()
     deleted = await store.delete_report(report_id)
@@ -45,7 +45,7 @@ async def delete_report(report_id: str):
 
 
 # ---------------------------------------------------------------------------
-# Human-in-the-loop editing
+# 人在回路编辑
 # ---------------------------------------------------------------------------
 class ReportEdit(BaseModel):
     target_path: str
@@ -81,11 +81,11 @@ def _resolve_parent(root: Any, steps: List[Tuple[str, Any]]) -> Tuple[Any, Any]:
 
 
 def _count_claims(report: FinalReport) -> int:
-    """Approximate count of editable structured claims — the manual-correction denominator."""
-    n = 1 + len(report.sections)  # executive summary + each section
+    """可编辑结构化断言的近似数量 —— 人工修正率的分母。"""
+    n = 1 + len(report.sections)  # 执行摘要 + 每个章节
     items = list(report.competitors) + ([report.target_product] if report.target_product else [])
     for c in items:
-        n += 3  # short_description, market_position, homepage
+        n += 3  # short_description、market_position、homepage
         n += max(c.function_tree.leaf_count(), len(c.function_tree.nodes))
         n += len(c.pricing.tiers)
         n += len(c.user_profile.segments)
@@ -97,11 +97,11 @@ def _count_claims(report: FinalReport) -> int:
 
 @router.patch("/{report_id}")
 async def patch_report(report_id: str, req: PatchReportRequest):
-    """Apply human edits to a generated report (human-in-the-loop correction).
+    """对一份生成的报告应用人工编辑（人在回路修正）。
 
-    Each edit sets a dotted ``target_path`` to a new value, records a
-    :class:`Correction` (before/after) for the audit trail and the active-learning
-    loop, and the report's ``manual_correction_rate`` metric is recomputed.
+    每次编辑把一个点分的 ``target_path`` 设为新值，记录一条 :class:`Correction`
+    （前 / 后）用于审计轨迹与主动学习闭环，并重新计算报告的
+    ``manual_correction_rate`` 指标。
     """
     store = get_store()
     await store.init()
@@ -128,13 +128,13 @@ async def patch_report(report_id: str, req: PatchReportRequest):
             note=edit.note, author=edit.author,
         ))
 
-    # Re-validate the edited document before persisting.
+    # 持久化前重新校验编辑后的文档。
     try:
         edited = FinalReport.model_validate(root)
     except Exception as exc:
         raise HTTPException(400, f"edit produced an invalid report: {exc}")
 
-    # Append corrections to the report audit trail + global corrections table.
+    # 把修正追加到报告审计轨迹 + 全局修正表。
     edited.corrections = list(report.corrections) + corrections
     for c in corrections:
         await store.save_correction(c)
@@ -145,7 +145,7 @@ async def patch_report(report_id: str, req: PatchReportRequest):
     edited.metrics.manual_correction_rate = round(min(total_corrections / claims, 1.0), 3)
 
     await store.save_report(edited)
-    # New lessons learned should reach the next run immediately.
+    # 新的经验教训应立即送达下一次运行。
     invalidate_cache(report.market)
 
     return {
@@ -159,7 +159,7 @@ async def patch_report(report_id: str, req: PatchReportRequest):
 
 @router.get("/{report_id}/html")
 async def get_report_html(report_id: str, download: int = 0):
-    """Return the report as a single self-contained HTML document."""
+    """以单个自包含的 HTML 文档形式返回报告。"""
     store = get_store()
     await store.init()
     report = await store.get_report(report_id)

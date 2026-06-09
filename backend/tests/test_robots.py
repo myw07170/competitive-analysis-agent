@@ -1,4 +1,4 @@
-"""Robots.txt compliance helpers (compliance dimension)."""
+"""Robots.txt 合规辅助函数（合规维度）。"""
 from __future__ import annotations
 
 import urllib.robotparser
@@ -20,7 +20,7 @@ def test_real_hosts_not_flagged():
 
 
 def test_robotparser_disallow_is_respected():
-    # Sanity-check the stdlib parser the collector relies on.
+    # 对采集器所依赖的标准库解析器做基本校验。
     rp = urllib.robotparser.RobotFileParser()
     rp.parse([
         "User-agent: *",

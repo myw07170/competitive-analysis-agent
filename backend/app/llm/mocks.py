@@ -1,11 +1,10 @@
-"""Mock LLM outputs used when no Ark API key is configured.
+"""未配置 Ark API Key 时使用的 mock LLM 输出。
 
-Keyed by ``intent`` so each agent receives a shape compatible with its
-expected schema. The mock data is deliberately plausible (not just lorem
-ipsum) so the demo UI looks real.
+按 ``intent`` 索引，使每个智能体收到与其期望 schema 兼容的形态。mock 数据
+刻意做得合情合理（而非随便的占位文本），使演示 UI 看起来真实。
 
-The user's product name and market are extracted from the user prompt so
-the mock output personalizes a little — enough to feel real on a demo.
+用户的产品名和市场从 user prompt 中提取，因此 mock 输出会稍作个性化 ——
+足以在演示中显得真实。
 """
 from __future__ import annotations
 
@@ -31,18 +30,17 @@ def respond(intent: str, *, system: str, user: str) -> Dict[str, Any]:
 
 
 def _detect_market(text: str) -> str:
-    """Best-effort market inference from a prompt, for the mock backend only.
+    """仅供 mock 后端使用、从 prompt 尽力推断市场。
 
-    Checks robust signals in priority order: the explicit ``(us)`` / ``(cn)``
-    market code emitted by the prompts, the locale tag, the fixed market display
-    names, and finally the presence of CJK characters.
+    按优先级检查若干稳健信号：prompt 显式输出的 ``(us)`` / ``(cn)`` 市场代码、
+    locale 标签、固定的市场显示名，最后是是否含有 CJK 字符。
     """
     t = text.lower()
     if any(sig in t for sig in ("en-us", "(us)", "united states")):
         return "us"
     if "zh-cn" in t or "(cn)" in t or "中国" in text:
         return "cn"
-    # Fallback: any CJK character → Chinese market, else US.
+    # 兜底：含任意 CJK 字符 → 中国市场，否则美国市场。
     return "cn" if re.search(r"[一-鿿]", text) else "us"
 
 
@@ -54,7 +52,7 @@ def _detect_product(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Collector
+# 采集器
 # ---------------------------------------------------------------------------
 @register("collector.identify_competitors")
 def _identify(system: str, user: str) -> Dict[str, Any]:
@@ -177,7 +175,7 @@ def _gather(system: str, user: str) -> Dict[str, Any]:
             ],
         }
 
-    # ---- CN ----
+    # ---- 中国市场 ----
     return {
         "name": name,
         "homepage": "https://example.cn",
@@ -278,22 +276,22 @@ def _gather(system: str, user: str) -> Dict[str, Any]:
 
 @register("collector.rework")
 def _gather_rework(system: str, user: str) -> Dict[str, Any]:
-    """A second-pass collector mock — returns a richer payload with more sources,
-    so the QC feedback loop visibly improves the output."""
+    """第二遍采集器 mock —— 返回带更多来源的更丰富载荷，
+    使 QC 反馈闭环可见地改进输出。"""
     base = _gather(system=system, user=user)
     extra_src = {"kind": "web", "title": "Additional press coverage",
                  "url": "https://example.com/news",
                  "snippet": "Additional coverage gathered during rework.",
                  "confidence": 0.8}
     base.setdefault("sources", []).append(extra_src)
-    # Boost source count on pricing tiers
+    # 提升定价档位的来源数量
     for tier in base.get("pricing", {}).get("tiers", []):
         tier.setdefault("sources", []).append(extra_src)
     return base
 
 
 # ---------------------------------------------------------------------------
-# Analyst
+# 分析师
 # ---------------------------------------------------------------------------
 @register("analyst.swot")
 def _swot(system: str, user: str) -> Dict[str, Any]:
@@ -361,7 +359,7 @@ def _swot(system: str, user: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Writer
+# 撰写器
 # ---------------------------------------------------------------------------
 @register("writer.report")
 def _report(system: str, user: str) -> Dict[str, Any]:
@@ -435,12 +433,12 @@ def _report(system: str, user: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 @register("qc.review")
 def _qc(system: str, user: str) -> Dict[str, Any]:
-    """First QC pass — usually returns one MAJOR finding to demonstrate the loop.
+    """第一遍 QC —— 通常返回一个 MAJOR 结论以演示循环。
 
-    The orchestrator inspects the ``iteration`` counter (passed via prompt) and
-    asks ``qc.review_final`` once rework is done.
+    编排器检查 ``iteration`` 计数器（经 prompt 传入），并在返工完成后请求
+    ``qc.review_final``。
     """
-    # If the prompt indicates this is the rework iteration, approve.
+    # 若 prompt 显示这是返工迭代，则通过。
     lower_user = user.lower()
     if "iteration: 1" in lower_user or "iteration: 2" in lower_user:
         return {

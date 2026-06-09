@@ -1,7 +1,7 @@
-"""Cross-run knowledge evolution endpoints (Innovation-3).
+"""跨运行知识演化端点（创新点 3）。
 
-Lets the UI answer "what changed about this competitor since last time?" by
-diffing the two most recent snapshots, and browse the tracked-entity list.
+通过对最近两个快照做 diff，让 UI 能回答"自上次以来这个竞品有什么变化？"，
+并浏览受跟踪的实体列表。
 """
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ async def history(market: str, name: str, limit: int = 20):
 
 @router.get("/diff")
 async def diff(market: str, name: str):
-    """Diff the two latest snapshots of one competitor."""
+    """对某个竞品最近两个快照做 diff。"""
     store = get_store()
     await store.init()
     key = normalize_entity_key(name, market)

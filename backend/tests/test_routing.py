@@ -1,4 +1,4 @@
-"""Role-targeted rework routing + per-competitor note slicing (P0-1, P1-5)."""
+"""按角色定向的返工路由 + 按竞品的备注切片（P0-1、P1-5）。"""
 from __future__ import annotations
 
 from app.orchestration.graph import (
@@ -50,8 +50,8 @@ def test_earliest_stage_wins_when_multiple_agents():
 
 
 def test_minor_only_does_not_force_specific_stage_but_still_routes():
-    # decision=="rework" implies a severe finding existed; minor-only collector
-    # path still resolves to a stage (collector fallback).
+    # decision=="rework" 意味着存在严重结论；仅有 minor 的采集器路径
+    # 仍会解析到某个阶段（采集器兜底）。
     st = {"last_qc": _qc("rework", [_f("collector", "minor", "competitors[0].sources")]),
           "iteration": 1}
     assert _route_after_qc(st) == "collect"
@@ -66,7 +66,7 @@ def test_flagged_collector_labels():
     qc = _qc("rework", [
         _f("collector", "major", "competitors[1].pricing.tiers"),
         _f("collector", "minor", "target_product.sources"),
-        _f("analyst", "major", "competitors[0].swot"),  # not a collector label
+        _f("analyst", "major", "competitors[0].swot"),  # 不是采集器标签
     ])
     labels = _flagged_collector_labels(qc)
     assert labels == {"competitors[1]", "target_product"}

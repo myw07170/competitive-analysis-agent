@@ -1,5 +1,5 @@
-# Start the Vite frontend in development mode.
-# Run from the repo root:  .\scripts\start-frontend.ps1
+# 以开发模式启动 Vite 前端。
+# 在仓库根目录运行：  .\scripts\start-frontend.ps1
 
 $ErrorActionPreference = "Stop"
 

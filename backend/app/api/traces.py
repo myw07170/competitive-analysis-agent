@@ -1,4 +1,4 @@
-"""Trace endpoints — used by the "decision replay" panel."""
+"""追踪端点 —— 供"决策回放"面板使用。"""
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException

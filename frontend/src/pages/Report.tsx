@@ -17,8 +17,7 @@ import AgentFlow, { NodeStatus } from "../components/AgentFlow";
 import ComparisonView from "../components/ComparisonView";
 import { Locale, makeT } from "../i18n";
 
-// Threaded through the tabs so any field can save a human edit (PATCH) and
-// refresh the report in place.
+// 贯穿各标签页传递，使任意字段都能保存一次人工编辑（PATCH）并就地刷新报告。
 interface Editor {
   reportId: string;
   onSaved: (report: any) => void;
@@ -49,8 +48,8 @@ export default function Report() {
     getDag().then(setDag).catch(() => {});
   }, []);
 
-  // The trace tab reuses the live Agent-flow layout; in a finished report every
-  // stage is, by definition, complete — so light them all up as "done".
+  // 追踪标签页复用实时的智能体流程布局；在一份已完成的报告中，每个阶段
+  // 按定义都已完成 —— 因此把它们全部点亮为 "done"。
   const allDoneStatus = useMemo<Record<string, NodeStatus>>(() => {
     const s: Record<string, NodeStatus> = {};
     for (const n of dag?.nodes || []) s[n.id] = "done";
@@ -58,8 +57,8 @@ export default function Report() {
   }, [dag]);
 
   useEffect(() => {
-    // Prefer the live ?run= param; fall back to the run_id persisted on the
-    // report so the trace is available even when opened from history.
+    // 优先使用实时的 ?run= 参数；回退到报告上持久化的 run_id，
+    // 使从历史打开时追踪也可用。
     const rid = runId || report?.run_id;
     if (rid) getTrace(rid).then(setEvents).catch(() => {});
   }, [runId, report?.run_id]);
@@ -67,8 +66,8 @@ export default function Report() {
   const locale: Locale = useMemo(() => (report?.locale as Locale) || "en-US", [report]);
   const t = useMemo(() => makeT(locale), [locale]);
 
-  // Build a source-id -> source lookup used by every component that renders
-  // [^src_xxx] footnote markers inline.
+  // 构建一个 source-id -> source 查找表，供每个内联渲染 [^src_xxx]
+  // 脚注标记的组件使用。
   const sourceMap = useMemo(() => {
     const map: Record<string, any> = {};
     for (const s of report?.all_sources || []) map[s.id] = s;
@@ -153,7 +152,7 @@ export default function Report() {
         </div>
 
         <div className="p-5 print:p-0">
-          {/* On screen: only the active tab. When printing: render everything stacked. */}
+          {/* 屏幕上：只显示当前激活的标签页。打印时：把所有内容堆叠渲染。 */}
           <div className={tab === "report" ? "" : "hidden print:block"}>
             <ReportBody t={t} report={report} sourceMap={sourceMap} editor={editor} />
           </div>
@@ -478,10 +477,9 @@ function ReportBody({
 }
 
 /**
- * Renders markdown that contains [^src_xxx] footnote markers. Each marker is
- * rewritten as a markdown link `[short](#source-src_xxx)` which is then
- * rendered as a clickable superscript that scrolls to the Sources tab entry
- * (or opens the source URL in a new tab when one is available).
+ * 渲染含有 [^src_xxx] 脚注标记的 markdown。每个标记被改写为一个 markdown 链接
+ * `[short](#source-src_xxx)`，再渲染为一个可点击的上标，点击后滚动到来源标签页
+ * 中对应的条目（或在有 URL 时在新标签页打开来源链接）。
  */
 function CitedMarkdown({
   text,
@@ -492,11 +490,10 @@ function CitedMarkdown({
 }) {
   const transformed = useMemo(() => {
     if (!text) return "";
-    // remark-gfm parses [^xxx] as footnote references and would render them
-    // as garbled definitions. Rewrite them to plain markdown links pointing
-    // to anchors we control in the Sources tab.
+    // remark-gfm 会把 [^xxx] 解析为脚注引用，并将其渲染为乱码定义。
+    // 把它们改写为指向来源标签页中由我们控制的锚点的普通 markdown 链接。
     return text.replace(/\[\^(src_[A-Za-z0-9_]+)\]/g, (_m, id) => {
-      // Escape inner brackets so the outer link-text grammar parses cleanly.
+      // 转义内层方括号，使外层链接文本语法能干净地解析。
       return ` [\\[${shortId(id)}\\]](#source-${id})`;
     });
   }, [text]);
@@ -554,7 +551,7 @@ function CitedMarkdown({
 }
 
 function shortId(id: string): string {
-  // src_abc123def -> abc1
+  // src_abc123def -> abc1（取短 id）
   const tail = id.replace(/^src_/, "");
   return tail.slice(0, 4) || id;
 }

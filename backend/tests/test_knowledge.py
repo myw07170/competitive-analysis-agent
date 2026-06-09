@@ -1,4 +1,4 @@
-"""Cross-run knowledge diff (Innovation-3)."""
+"""跨运行知识 diff（创新点 3）。"""
 from __future__ import annotations
 
 from app.knowledge import compute_diff

@@ -1,4 +1,4 @@
-"""Agent self-evaluation endpoints (Innovation-4) + correction transparency."""
+"""智能体自评端点（创新点 4）+ 修正透明度。"""
 from __future__ import annotations
 
 from typing import Optional
@@ -13,13 +13,13 @@ router = APIRouter(prefix="/api/meta", tags=["meta"])
 
 @router.get("/suggestions")
 async def suggestions(limit: int = 200):
-    """Data-driven schema-evolution suggestions from historical reports."""
+    """来自历史报告的数据驱动 schema 演进建议。"""
     return await MetaEvaluator().evaluate(limit=limit)
 
 
 @router.get("/corrections")
 async def corrections(market: Optional[str] = None, limit: int = 50):
-    """Recent human corrections feeding the active-learning loop."""
+    """为主动学习闭环提供输入的近期人工修正。"""
     store = get_store()
     await store.init()
     rows = await store.list_corrections(market=market, limit=limit)

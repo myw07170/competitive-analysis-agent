@@ -14,9 +14,9 @@ const AGENT_COLOR: Record<string, string> = {
   orchestrator: "bg-slate-100 text-slate-700",
 };
 
-// Intents that should be merged together when they appear contiguously for
-// the same agent — e.g. swot(douyin), swot(weixin), swot(xhs) all roll into
-// one "SWOT analysis" group.
+// 当同一智能体的若干 intent 连续出现时应当合并的那些 ——
+// 例如 swot(douyin)、swot(weixin)、swot(xhs) 全部并入
+// 一个 "SWOT analysis" 分组。
 const GROUPABLE_INTENTS: Record<string, string> = {
   "analyst.swot": "trace.group.swot",
   "collector.gather_competitor": "trace.group.gather",
@@ -26,7 +26,7 @@ const GROUPABLE_INTENTS: Record<string, string> = {
 interface TraceGroup {
   key: string;
   agent: string;
-  intentKey: string; // groupable intent or full intent
+  intentKey: string; // 可分组的 intent 或完整 intent
   label: string;
   events: TraceEvent[];
 }

@@ -1,8 +1,8 @@
-"""JSON-repair pipeline tests — the hallucination-resilience layer.
+"""JSON 修复流水线测试 —— 抗幻觉韧性层。
 
-The collector/analyst/writer frequently return *almost* JSON; ``_parse_json_safely``
-recovers fenced, prose-wrapped, trailing-comma, control-char, and truncated
-outputs. These cases mirror real failures captured in ``data/debug/``.
+采集器 / 分析师 / 撰写器经常返回*几乎*是 JSON 的内容；``_parse_json_safely``
+能恢复被代码块围栏、文字包裹、尾随逗号、控制字符和截断的输出。
+这些用例对应 ``data/debug/`` 中捕获的真实失败。
 """
 from __future__ import annotations
 
@@ -26,13 +26,13 @@ def test_trailing_comma_repaired():
 
 
 def test_raw_newline_in_string_escaped():
-    # A markdown table dropped raw into a JSON string value (very common).
+    # 一张 markdown 表格被原样塞进 JSON 字符串值（非常常见）。
     r = _parse_json_safely('{"body_md": "| a | b |\n| - | - |\n| 1 | 2 |"}')
     assert r is not None and "| a | b |" in r["body_md"]
 
 
 def test_truncated_object_recovered():
-    # Mid-stream truncation: unbalanced braces/brackets are closed.
+    # 流中途截断：未配平的花括号 / 方括号会被闭合。
     r = _parse_json_safely('{"name": "X", "tiers": [{"t": 1}, {"t": 2')
     assert r is not None and r["name"] == "X"
 

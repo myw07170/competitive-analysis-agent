@@ -29,7 +29,7 @@ interface ProgressLine {
 }
 
 interface HomeProps {
-  // Owned by App so the header language can track it; the setup page drives it.
+  // 由 App 持有，使顶栏语言能随之变化；由设置页驱动它。
   market: string;
   setMarket: (code: string) => void;
 }
@@ -48,8 +48,8 @@ export default function Home({ market, setMarket }: HomeProps) {
   const [submittedProduct, setSubmittedProduct] = useState<string>("");
   const [runId, setRunId] = useState<string | null>(null);
   const [resuming, setResuming] = useState(false);
-  // Furthest pipeline stage reached in the current cycle — a collect event
-  // arriving after we've already passed collect signals a QC rework loop.
+  // 当前周期中到达的最远流水线阶段 —— 在已越过 collect 之后再到来一个
+  // collect 事件，标志着一次 QC 返工循环。
   const frontierRef = useRef(0);
   const navigate = useNavigate();
 
@@ -89,7 +89,7 @@ export default function Home({ market, setMarket }: HomeProps) {
     attachStream(start.run_id, extra);
   }
 
-  // Resume an interrupted run from its last checkpoint.
+  // 从最近的检查点恢复一次被中断的运行。
   async function onResume() {
     if (!runId) return;
     setResuming(true);
@@ -115,11 +115,10 @@ export default function Home({ market, setMarket }: HomeProps) {
         if (!n) return;
         const idx = NODE_ORDER.indexOf(n);
 
-        // QC rework loop: a fresh collect event after we've already advanced
-        // past collect means QC routed back. Reset every downstream stage —
-        // status AND progress — so the new round relights them cleanly (this
-        // is what clears the stale "write"/"qc" progress bars). There is no
-        // separate "rework" status; the round badge communicates the loop.
+        // QC 返工循环：在已越过 collect 之后再来一个新的 collect 事件，
+        // 意味着 QC 已路由回退。重置每个下游阶段 —— 状态与进度 —— 使新一轮
+        // 能干净地重新点亮它们（这正是清除陈旧的 "write"/"qc" 进度条的方式）。
+        // 没有单独的 "rework" 状态；轮次徽标传达了这个循环。
         if (n === "collect" && frontierRef.current > NODE_ORDER.indexOf("collect")) {
           frontierRef.current = NODE_ORDER.indexOf("collect");
           setNodeStatus((s) => ({
@@ -141,7 +140,7 @@ export default function Home({ market, setMarket }: HomeProps) {
         }
         frontierRef.current = Math.max(frontierRef.current, idx);
 
-        // Track sub-progress per node from the trace intents / decisions.
+        // 根据追踪的 intent / 决策跟踪每个节点的子进度。
         setNodeProgress((p) => updateProgress(p, ev));
         pushLog({
           node: n,
@@ -152,10 +151,9 @@ export default function Home({ market, setMarket }: HomeProps) {
         setActiveNodeId(n);
         setNodeStatus((s) => {
           const next: Record<string, NodeStatus> = { ...s };
-          // Current node is "running" until a later-stage event arrives. This
-          // keeps a multi-competitor collect/analyze stage in-progress until
-          // ALL competitors have been processed (the next stage's first event
-          // implies the previous stage is complete).
+          // 当前节点保持 "running" 直到一个更后阶段的事件到来。这使一个
+          // 多竞品的 collect/analyze 阶段持续处于进行中，直到所有竞品都被处理完
+          //（下一阶段的第一个事件即意味着上一阶段已完成）。
           next[n] = "running";
           for (let i = 0; i < idx; i++) next[NODE_ORDER[i]] = "done";
           return next;
@@ -175,7 +173,7 @@ export default function Home({ market, setMarket }: HomeProps) {
               });
             }
           } catch {
-            /* ignore */
+            /* 忽略 */
           }
         }
       },
@@ -185,7 +183,7 @@ export default function Home({ market, setMarket }: HomeProps) {
         setNodeStatus((s) => {
           const next: Record<string, NodeStatus> = { ...s };
           if (!info.error) {
-            // Final transition: every stage is done now.
+            // 最终过渡：此刻每个阶段都已完成。
             for (const id of NODE_ORDER) next[id] = "done";
           }
           return next;
@@ -246,9 +244,9 @@ export default function Home({ market, setMarket }: HomeProps) {
     };
   }
 
-  // ── Setup screen ─────────────────────────────────────────────────────────
-  // A standalone, centered page (no sidebar). It is the only thing shown until
-  // the user starts a run — the flow / decision-trace view is hidden until then.
+  // ── 设置界面 ─────────────────────────────────────────────────────────
+  // 一个独立、居中的页面（无侧栏）。在用户启动一次运行之前它是唯一显示的内容
+  // —— 流程 / 决策追踪视图在此之前隐藏。
   if (!started) {
     return (
       <div className="max-w-[var(--page-max-width)] mx-auto px-6">
@@ -272,8 +270,8 @@ export default function Home({ market, setMarket }: HomeProps) {
     );
   }
 
-  // ── Run screen ───────────────────────────────────────────────────────────
-  // Shown once a run starts: the Agent flow + decision trace and live progress.
+  // ── 运行界面 ───────────────────────────────────────────────────────────
+  // 一次运行启动后显示：智能体流程 + 决策追踪与实时进度。
   return (
     <div className="max-w-[var(--page-max-width)] mx-auto px-6 py-6 space-y-4">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">

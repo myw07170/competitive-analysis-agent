@@ -29,8 +29,8 @@ interface Props {
   comparison?: ComparisonMatrix | null;
 }
 
-// The user's own product gets a fixed warm accent so it's instantly
-// distinguishable from the cool-palette competitors in every chart / table.
+// 用户自己的产品获得一个固定的暖色强调色，使其在每张图表 / 表格中
+// 都能与冷色调的竞品立刻区分开来。
 const SELF_COLOR = "#f59e0b";
 const PALETTE = ["#2563eb", "#db2777", "#059669", "#0891b2", "#7c3aed", "#0ea5e9"];
 

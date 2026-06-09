@@ -4,7 +4,7 @@ import type { DagDef, DagNode, TraceEvent } from "../api/client";
 import type { Locale } from "../i18n";
 
 // ---------------------------------------------------------------------------
-// Shared node vocabulary (also imported by Home).
+// 共享的节点词汇（也被 Home 导入）。
 // ---------------------------------------------------------------------------
 export type NodeStatus = "idle" | "running" | "done";
 
@@ -16,7 +16,7 @@ export interface NodeProgress {
 
 export const NODE_ORDER = ["identify", "collect", "analyze", "write", "qc", "done"];
 
-/** Map a trace intent to the DAG node that produced it. */
+/** 把一个追踪 intent 映射到产生它的 DAG 节点。 */
 export function intentToNode(intent: string): string | null {
   if (intent.startsWith("collector.identify")) return "identify";
   if (intent.startsWith("collector.")) return "collect";
@@ -47,14 +47,13 @@ const AGENT_COLOR: Record<string, string> = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// LAYOUT KNOBS — tune the two columns independently.
+// 布局旋钮 —— 两列可独立调节。
 //
-//   FLOWCHART_WIDTH  width of the left "协作流程图" (collaboration flow) column.
-//   TRACE_WIDTH      width of the right "决策追踪" (decision-trace) column once a
-//                    step is expanded. Use a CSS length (px / rem) — not a
-//                    fraction — so the open/close transition animates smoothly.
-//   COLUMN_GAP       horizontal spacing between the flow column and the trace
-//                    column when expanded ("稍微大一点" → bump this up).
+//   FLOWCHART_WIDTH  左侧"协作流程图"列的宽度。
+//   TRACE_WIDTH      展开某步骤后右侧"决策追踪"列的宽度。请使用 CSS 长度
+//                    （px / rem）而非分数，使展开 / 收起的过渡动画平滑。
+//   COLUMN_GAP       展开时流程列与追踪列之间的水平间距
+//                    （"稍微大一点" → 调大这个值）。
 const FLOWCHART_WIDTH = "240px";
 const TRACE_WIDTH = "600px";
 const COLUMN_GAP = "3rem";
@@ -62,10 +61,9 @@ const COLUMN_GAP = "3rem";
 
 
 /**
- * Assign each event to a "round". Round 0 is the first pass; each QC review
- * (which precedes a possible rework loop) bumps the round for everything that
- * follows. This lets the trace panel group "首次 / 第N次返工" intuitively, and
- * is derived purely from the event stream (no fragile decision parsing).
+ * 把每个事件归入一个"轮次"。第 0 轮是首遍；每一次 QC 审查（它先于一次可能的
+ * 返工循环）都会把其后所有内容的轮次加一。这让追踪面板能直观地按
+ * "首次 / 第N次返工"分组，并且纯粹从事件流推导得出（无需脆弱的决策解析）。
  */
 function computeRounds(events: TraceEvent[]): {
   roundOf: Map<string, number>;
@@ -83,9 +81,8 @@ function computeRounds(events: TraceEvent[]): {
 }
 
 /**
- * Agent-collaboration flowchart (left) paired with a decision-trace panel
- * (right). The flow sits centered while idle; selecting a step slides the trace
- * panel in on the right and the flowchart drifts left to make room.
+ * 智能体协作流程图（左）搭配一个决策追踪面板（右）。空闲时流程图居中；
+ * 选中某个步骤会让追踪面板从右侧滑入，流程图向左漂移以腾出空间。
  */
 export default function AgentFlow({
   dag,
@@ -97,11 +94,10 @@ export default function AgentFlow({
   t,
 }: Props) {
   const useZh = locale.startsWith("zh");
-  // Steps whose decision trace is currently expanded. Multiple may be open at
-  // once — each step toggles independently.
+  // 当前展开了决策追踪的步骤。可同时展开多个 —— 每个步骤独立切换。
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
-  // Lags behind openIds so panel content stays mounted while the column
-  // collapses (smooth close). Holds the last non-empty set for one transition.
+  // 滞后于 openIds，使列收起时面板内容仍保持挂载（平滑关闭）。
+  // 在一次过渡期间保留最后一个非空集合。
   const [renderIds, setRenderIds] = useState<string[]>([]);
 
   const eventsByNode = useMemo(() => {
@@ -124,7 +120,7 @@ export default function AgentFlow({
       return next;
     });
 
-  // Drop any open step that loses its events (e.g. when a new run resets them).
+  // 丢弃任何失去其事件的已展开步骤（例如新一次运行重置了它们时）。
   useEffect(() => {
     setOpenIds((prev) => {
       let changed = false;
@@ -139,8 +135,7 @@ export default function AgentFlow({
     });
   }, [eventsByNode]);
 
-  // Adopt the open set immediately; on full collapse, hold the rendered panels
-  // for one transition before unmounting them.
+  // 立即采用展开集合；完全收起时，在卸载已渲染面板前保留它们一次过渡。
   useEffect(() => {
     if (openIds.size > 0) {
       setRenderIds(NODE_ORDER.filter((id) => openIds.has(id)));
@@ -161,14 +156,12 @@ export default function AgentFlow({
         </div>
       )}
 
-      {/* One grid ROW per step: left cell = flow step + connector, right cell =
-          that step's decision trace. Because both cells share a row, their tops
-          line up. `items-stretch` lets each cell fill the row height, so:
-          • a trace TALLER than its step stretches the row → the connector grows
-            and the next step slides down to stay aligned (req. 1, case "靠下");
-          • a trace HIGHER than its step is pushed down by the empty right cells
-            of the steps above it (req. 1, case "靠上").
-          Columns/gap are the tunable knobs above. */}
+      {/* 每个步骤一行网格：左单元 = 流程步骤 + 连接线，右单元 = 该步骤的决策追踪。
+          因为两个单元共享一行，它们的顶部对齐。`items-stretch` 让每个单元填满行高，于是：
+          • 比步骤更高的追踪会拉伸该行 → 连接线变长，下一步骤随之下移以保持对齐
+            （需求 1，"靠下"情形）；
+          • 比步骤更靠上的追踪会被其上方步骤的空右单元向下推（需求 1，"靠上"情形）。
+          列宽 / 间距是上面那些可调旋钮。 */}
       <div
         className="grid items-stretch"
         style={{
@@ -187,7 +180,7 @@ export default function AgentFlow({
           const showPanel = renderIds.includes(n.id);
           return (
             <Fragment key={n.id}>
-              {/* Flow step + growable connector. */}
+              {/* 流程步骤 + 可伸长的连接线。 */}
               <div className="flex flex-col min-w-0">
                 <NodeBlock
                   n={n}
@@ -205,9 +198,8 @@ export default function AgentFlow({
                 )}
               </div>
 
-              {/* This step's decision trace. Empty (no height) when the step
-                  isn't expanded; clipped while the column collapses. The inner
-                  fixed width keeps the panel from reflowing during that slide. */}
+              {/* 该步骤的决策追踪。步骤未展开时为空（无高度）；列收起时被裁剪。
+                  内层固定宽度使面板在滑动过程中不会重排。 */}
               <div className="overflow-hidden min-w-0">
                 {showPanel && (
                   <div style={{ width: TRACE_WIDTH }}>
@@ -345,9 +337,8 @@ function StatusDot({ status, isActive }: { status: NodeStatus; isActive: boolean
   );
 }
 
-// Connector between two steps. `flex-1` lets it absorb any extra height the
-// row gains when the trace panel on the right is taller than the step — the
-// stem stretches and the arrowhead stays pinned just above the next step.
+// 两个步骤之间的连接线。`flex-1` 让它吸收当右侧追踪面板比步骤更高时该行
+// 增加的额外高度 —— 线干被拉伸，箭头始终钉在下一步骤正上方。
 function Arrow({ done }: { done: boolean }) {
   const color = done ? "text-emerald-400" : "text-slate-300";
   const stem = done ? "bg-emerald-400" : "bg-slate-300";

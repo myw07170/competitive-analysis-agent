@@ -1,5 +1,5 @@
-# Start the FastAPI backend in development mode.
-# Run from the repo root:  .\scripts\start-backend.ps1
+# 以开发模式启动 FastAPI 后端。
+# 在仓库根目录运行：  .\scripts\start-backend.ps1
 
 $ErrorActionPreference = "Stop"
 

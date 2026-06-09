@@ -1,8 +1,7 @@
-"""End-to-end orchestration test in mock mode.
+"""mock 模式下的端到端编排测试。
 
-Exercises the full DAG (identify → collect → analyze → write → qc → done),
-including at least one rework loop (the mock QC returns "rework" on iteration 0
-and "approve" on iteration 1).
+覆盖完整的 DAG（identify → collect → analyze → write → qc → done），
+包括至少一次返工循环（mock QC 在迭代 0 返回 "rework"，在迭代 1 返回 "approve"）。
 """
 from __future__ import annotations
 
@@ -19,7 +18,7 @@ async def test_us_full_run():
     assert report.market == "us"
     assert report.locale == "en-US"
     assert report.competitors, "should have at least one competitor"
-    # Market detection in the mock backend should yield US competitors.
+    # mock 后端的市场检测应给出美国市场的竞品。
     assert any(c.name in {"Notion", "Coda", "ClickUp"} for c in report.competitors)
     for c in report.competitors:
         assert c.function_tree.nodes, f"{c.name} has empty function tree"
@@ -27,10 +26,10 @@ async def test_us_full_run():
         assert c.user_profile.segments, f"{c.name} has no user segments"
         assert c.swot is not None, f"{c.name} missing SWOT"
 
-    # The QC mock always rejects iteration 0 — so the report should reflect a rework.
+    # QC mock 总是拒绝迭代 0 —— 因此报告应体现一次返工。
     assert report.metrics.qc_iterations >= 1
     assert report.metrics.total_llm_calls > 0
-    # New credibility metrics are populated.
+    # 新的可信度指标已填充。
     assert 0.0 <= report.metrics.avg_confidence <= 1.0
     assert report.metrics.manual_correction_rate == 0.0
     assert report.metrics.conflict_count >= 0
