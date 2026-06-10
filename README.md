@@ -11,7 +11,7 @@
 
 ## 1. 项目简介
 
-给定一个产品名称和一个目标市场，系统会启动一支由多个专职智能体组成的“数字调研团队”，它们协作完成以下工作：
+给定一个产品名称和目标市场，系统会启动一支由多个专职智能体组成的“数字调研团队”，它们协作完成以下工作：
 
 1. **采集（Collect）** 竞品的公开信息（网络搜索、遵循 robots.txt 的网页抓取、问卷式综合、模拟用户访谈）。
 2. **结构化（Structure）** 把信息对齐到一套严格的竞品知识 **Schema**（功能树、定价模型、用户画像）。
@@ -21,7 +21,7 @@
 
 每一条结论都**可溯源**（URL / 文档 / 访谈 ID）并附带置信度分数，每一个智能体决策都可通过结构化日志和追踪记录被**观测**。审阅者可以**就地编辑任意字段**（人在回路 / human-in-the-loop），而这些编辑会进入一个**主动学习闭环**，对后续运行产生引导。
 
-**技术栈一览：** 后端 FastAPI + LangGraph + Pydantic + SQLite，LLM 由火山方舟（Volcengine Ark）提供；前端 React 18 + Vite + TypeScript + Tailwind。无 API Key 时可一键进入 **mock 模式**离线体验完整流程。
+**技术栈：** 后端 FastAPI + LangGraph + Pydantic + SQLite，LLM 由火山引擎（Volcengine Ark）提供；前端 React 18 + Vite + TypeScript + Tailwind。
 
 ---
 
@@ -53,7 +53,7 @@
                                │
    ┌───────────────────────────┴───────────────────────────┐
    ▼                                                       ▼
- 火山方舟 Ark LLM                              可插拔的网络搜索
+ 火山引擎 Ark LLM                                    可插拔的网络搜索
  （豆包 / 自定义模型）                          （Tavily / Bing / Serper）
 ```
 
@@ -76,14 +76,14 @@
 
 - Python **3.10+**
 - Node **18+** 与 **pnpm**（或 npm / yarn）
-- 1个**火山引擎** 的 API Key + 一个模型 endpoint ID（例如豆包 Doubao）
+- 火山引擎 的 **API Key** + 模型 endpoint ID
 
 
 ---
 
 ## 5. 启动步骤
 
-### 5.1 一键脚本（推荐，Windows / PowerShell）
+### 5.1 一键脚本
 
 仓库根目录的 `scripts/` 下提供了幂等的启动脚本，自动完成建虚拟环境、装依赖、拷贝 `.env` 等步骤。在**两个**终端中分别运行：
 
@@ -92,8 +92,8 @@
 .\scripts\start-frontend.ps1    # 装 node 依赖，在 http://127.0.0.1:5173 启动前端
 ```
 
-### 5.2 手动启动 · 后端
-
+### 5.2 手动启动
+#### 后端
 ```powershell
 cd backend
 python -m venv .venv
@@ -107,7 +107,7 @@ notepad .env       # 设置 ARK_API_KEY 与 ARK_MODEL_ID，或保持 VOLC_MOCK=1
 python main.py     # 在 http://127.0.0.1:8000 启动 FastAPI
 ```
 
-### 5.3 手动启动 · 前端
+#### 前端
 
 ```powershell
 cd frontend
