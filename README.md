@@ -11,7 +11,7 @@
 
 ## 1. 项目简介
 
-给定一个产品名称和一个目标市场（🇨🇳 中国 / 🇺🇸 美国），系统会启动一支由多个专职智能体组成的“数字调研团队”，它们协作完成以下工作：
+给定一个产品名称和一个目标市场，系统会启动一支由多个专职智能体组成的“数字调研团队”，它们协作完成以下工作：
 
 1. **采集（Collect）** 竞品的公开信息（网络搜索、遵循 robots.txt 的网页抓取、问卷式综合、模拟用户访谈）。
 2. **结构化（Structure）** 把信息对齐到一套严格的竞品知识 **Schema**（功能树、定价模型、用户画像）。
@@ -68,12 +68,7 @@
 - **按角色定向的反馈闭环**——`qc` 会根据哪个智能体对阻塞性问题负责，把返工路由回 `collect`、`analyze` **或** `write`（[`orchestration/graph.py:_route_after_qc`](backend/app/orchestration/graph.py)）。只重新采集被标记的竞品（“定向返工”），且每个智能体只收到发给它的那部分 QC 结论，以带类型的 `AgentMessage` 承载。
 - **置信度感知的编排**——每条断言汇总其来源的置信度；证据薄弱的断言成为重新采集的候选项。以 `avg_confidence` / `low_confidence_claims` 指标呈现。
 - **自一致性 + 跨来源冲突检测**——竞品识别可在 N 个样本间做多数投票；定价 / 币种 / 能力上的矛盾会被标记为 `ConflictFlag` 并渲染成“⚠ 来源冲突”徽标（[`consistency.py`](backend/app/consistency.py)）。
-- **人在回路编辑**——`PATCH /api/reports/{id}` 应用字段编辑，记录一条 `Correction` 审计轨迹，并重新计算**人工修正率** KPI。
-- **主动学习**——把近期的修正提炼为“经验教训”，注入采集器 / 撰写器的 prompt（[`learning.py`](backend/app/learning.py)）。
-- **跨运行的知识演化**——每次运行都按归一化的实体键给每个竞品打快照；`GET /api/knowledge/diff` 展示自上次以来发生的变化（[`knowledge.py`](backend/app/knowledge.py)）。
-- **智能体自评 / 动态 schema**——`GET /api/meta/suggestions` 把字段完整度 + 反复出现的修正 / 冲突汇总为 schema 演进建议（[`meta.py`](backend/app/meta.py)）。
 - **DAG 检查点 + 续跑**——每个节点都对 `GraphState` 打检查点；被中断的运行可通过 `POST /api/analysis/resume/{run_id}` 从最近完成的阶段恢复。
-- **并发 + 持久化**——每个竞品的采集 / 分析并发执行（受限信号量约束）；运行注册表被持久化，因此状态 / 追踪能在重启后存活。
 
 ---
 
@@ -81,9 +76,8 @@
 
 - Python **3.10+**
 - Node **18+** 与 **pnpm**（或 npm / yarn）
-- 一个**火山方舟 Ark** 的 API Key + 一个模型 endpoint ID（例如豆包 Doubao）。你也可以在没有 Key 的情况下以 **mock 模式**启动。
+- 1个**火山引擎** 的 API Key + 一个模型 endpoint ID（例如豆包 Doubao）
 
-> 提示：在 mock 模式下无需联网、无需 API Key，完整的 DAG / 追踪 / 报告界面依然可端到端运行，非常适合首次体验和离线开发。
 
 ---
 
@@ -121,18 +115,8 @@ pnpm install
 pnpm dev           # 在 http://127.0.0.1:5173 启动 Vite
 ```
 
-打开 `http://127.0.0.1:5173`，选择 **🇨🇳 中国市场** 或 **🇺🇸 美国市场**，输入一个产品（例如 “Notion” 或 “飞书”），即可看到 DAG 逐节点点亮。
+打开 `http://127.0.0.1:5173`，选择 **目标市场**，输入一个产品（例如 “Notion” 或 “飞书”），即可看到 DAG 逐节点点亮。
 
-### 5.4 一键演示（无界面）
-
-```powershell
-# 通过脚本
-.\scripts\run-demo.ps1 -Product "Notion" -Market us
-
-# 或直接调用模块
-cd backend
-python -m app.scripts.demo --product "Notion" --market us
-```
 
 ---
 
@@ -142,7 +126,7 @@ python -m app.scripts.demo --product "Notion" --market us
 
 | 变量 | 默认值 | 用途 |
 | --- | --- | --- |
-| `ARK_API_KEY` | 空 | 火山方舟 API Key |
+| `ARK_API_KEY` | 空 | API Key |
 | `ARK_MODEL_ID` | 空 | Endpoint / 模型 ID（例如 `ep-202401XX-xxxxx`） |
 | `ARK_BASE_URL` | `https://ark.cn-beijing.volces.com/api/v3` | Ark 接入地址 |
 | `ARK_TIMEOUT` | `60` | 单次 LLM 调用超时（秒） |
