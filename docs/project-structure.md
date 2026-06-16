@@ -11,13 +11,10 @@ competitive-analysis-agent/
 ├── .gitignore
 │
 ├── docs/
-│   ├── architecture.md             # 系统架构 + DAG 图
 │   ├── agents.md                   # 各智能体契约 + 消息协议
 │   ├── schema.md                   # 竞品知识 schema
 │   ├── deployment.md               # 本地开发 + 生产部署
 │   ├── extension.md                # 新增市场 / 智能体 / 数据源
-│   ├── compliance.md               # robots.txt、ToS、PII、LLM 使用
-│   ├── demo-script.md              # 3 分钟视频讲解脚本
 │   └── project-structure.md        # ← 你正在看的文件
 │
 ├── backend/
