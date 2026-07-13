@@ -165,7 +165,7 @@ competitive-analysis-agent/
 │       ├── agents/                 # 采集器 / 分析师 / 撰写器 / QC
 │       ├── orchestration/          # LangGraph DAG + 状态机
 │       ├── schema/                 # Pydantic schema（竞品 / 消息 / 报告）
-│       ├── llm/                    # 火山方舟 Ark 客户端 + mock
+│       ├── llm/                    # 火山 Ark 客户端 + mock
 │       ├── collectors/             # 网络搜索 + 遵循 robots.txt 的抓取器
 │       ├── market/                 # 市场画像（CN / US，可插拔）
 │       ├── i18n/                   # 服务端多语言文案
